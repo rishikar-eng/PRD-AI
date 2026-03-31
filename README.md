@@ -1,4 +1,4 @@
-# Rian PRD Pipeline V1
+# Rian PRD Pipeline V1..
 
 AI-powered 6-stage PRD generation system for Rian.io
 
