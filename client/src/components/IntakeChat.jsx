@@ -64,13 +64,14 @@ export default function IntakeChat({ entryData, onComplete }) {
       if (response.ok) {
         if (data.complete) {
           // Intake complete, move to next stage
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: '✓ Perfect! I have everything I need. Moving to PRD generation...'
-          }]);
-          setTimeout(() => {
-            onComplete(data.structuredData);
-          }, 1500);
+          const completionMessage = { role: 'assistant', content: '✓ Perfect! I have everything I need. Moving to PRD generation...' };
+          setMessages(prev => {
+            const updatedMessages = [...prev, completionMessage];
+            setTimeout(() => {
+              onComplete({ structuredData: data.structuredData, messages: updatedMessages });
+            }, 1500);
+            return updatedMessages;
+          });
         } else {
           // Continue conversation
           setMessages(prev => [...prev, { role: 'assistant', content: data.question }]);

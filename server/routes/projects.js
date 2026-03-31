@@ -1,4 +1,5 @@
 import express from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../services/db.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -214,6 +215,62 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Restore project error:', error);
     res.status(500).json({ error: 'Failed to restore project' });
+  }
+});
+
+/**
+ * SPEC: POST /api/projects/current/share
+ * Purpose: Generate a share token for the currently active project
+ * Inputs: None - reads projectId from session
+ * Outputs: { shareUrl } with the full shareable link
+ * Side effects: Stores shareToken inside session_data JSONB field (no schema change needed)
+ * Error states: 400 if no active project in session, 404 if project not found, 500 on DB error
+ */
+router.post('/current/share', requireAuth, async (req, res) => {
+  try {
+    const projectId = req.session.pipelineState?.projectId;
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'No active project. Complete the pipeline first.' });
+    }
+
+    const userEmail = req.session.userEmail;
+
+    // Fetch current session_data to check for existing token (idempotent)
+    const { data: existing, error: fetchError } = await supabase
+      .from('projects')
+      .select('session_data')
+      .eq('id', projectId)
+      .eq('user_email', userEmail)
+      .single();
+
+    if (fetchError || !existing) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Reuse existing token if already generated
+    if (existing.session_data?.shareToken) {
+      const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/share/${existing.session_data.shareToken}`;
+      return res.json({ shareUrl });
+    }
+
+    // Generate new token and store inside session_data
+    const token = uuidv4();
+    const updatedSessionData = { ...existing.session_data, shareToken: token };
+
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({ session_data: updatedSessionData })
+      .eq('id', projectId)
+      .eq('user_email', userEmail);
+
+    if (updateError) throw updateError;
+
+    const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/share/${token}`;
+    res.json({ shareUrl });
+  } catch (error) {
+    console.error('Share project error:', error);
+    res.status(500).json({ error: 'Failed to generate share link' });
   }
 });
 

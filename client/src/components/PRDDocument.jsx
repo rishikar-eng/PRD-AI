@@ -1,11 +1,23 @@
 import React from 'react';
 
-export default function PRDDocument({ prdText, highlightedSections = [] }) {
+export default function PRDDocument({ prdText, highlightedSections = [], isRegenerating = false }) {
   // Parse PRD into sections
-  const sections = prdText.split(/\n## /).filter(Boolean);
+  const sections = (prdText || '').split(/\n## /).filter(Boolean);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* Regenerating overlay */}
+      {isRegenerating && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 10,
+          background: 'rgba(10, 10, 15, 0.7)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: '12px',
+        }}>
+          <div className="typing-dots"><span></span><span></span><span></span></div>
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Regenerating PRD...</div>
+        </div>
+      )}
       <div style={{
         padding: '24px 24px 16px',
         borderBottom: '1px solid var(--border)',

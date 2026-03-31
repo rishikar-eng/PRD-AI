@@ -6,6 +6,7 @@ import EntryMode from './components/EntryMode';
 import IntakeChat from './components/IntakeChat';
 import AgentPipeline from './components/AgentPipeline';
 import ReviewStage from './components/ReviewStage';
+import ShareView from './components/ShareView';
 import { API_URL } from './config';
 import './styles/globals.css';
 import './styles/components.css';
@@ -18,13 +19,50 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [entryData, setEntryData] = useState(null);
   const [structuredData, setStructuredData] = useState(null);
+  const [intakeMessages, setIntakeMessages] = useState([]);
   const [pipelineData, setPipelineData] = useState(null);
   const [finalPRD, setFinalPRD] = useState(null);
+  const [pendingShareToken, setPendingShareToken] = useState(null);
+  const [shareData, setShareData] = useState(null);
 
-  // Check authentication status on mount
+  // Check authentication status on mount; detect share URLs
   useEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/share/')) {
+      const token = path.split('/share/')[1];
+      if (token) setPendingShareToken(token);
+    }
     checkAuth();
   }, []);
+
+  // Once authenticated, auto-fetch share data if a token is pending
+  useEffect(() => {
+    if (isAuthenticated && pendingShareToken) {
+      fetchShareData(pendingShareToken);
+    }
+  }, [isAuthenticated, pendingShareToken]);
+
+  const fetchShareData = async (token) => {
+    try {
+      const response = await fetch(`${API_URL}/api/share/${token}`, {
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setShareData({ error: data.error || 'Share link not found' });
+        return;
+      }
+      setShareData(data);
+    } catch (error) {
+      setShareData({ error: 'Failed to load shared PRD' });
+    }
+  };
+
+  const handleCloseShare = () => {
+    setShareData(null);
+    setPendingShareToken(null);
+    window.history.pushState({}, '', '/');
+  };
 
   const checkAuth = async () => {
     try {
@@ -100,6 +138,7 @@ export default function App() {
       setCurrentStage(state.stage);
       setEntryData(state.input || null);
       setStructuredData(state.intake?.structuredData || null);
+      setIntakeMessages(state.intake?.conversationHistory || []);
 
       if (state.prd?.v0) {
         setPipelineData({
@@ -126,8 +165,9 @@ export default function App() {
     setCurrentStage(1); // Move to IntakeChat
   };
 
-  const handleIntakeComplete = (data) => {
-    setStructuredData(data);
+  const handleIntakeComplete = ({ structuredData, messages }) => {
+    setStructuredData(structuredData);
+    setIntakeMessages(messages);
     setCurrentStage(2); // Move to Agent Pipeline (Writer, QC, Debate)
   };
 
@@ -140,6 +180,11 @@ export default function App() {
     setFinalPRD(data);
     setCurrentStage(6); // Move to Final Screen
   };
+
+  // Share view - authenticated users viewing a shared PRD
+  if (isAuthenticated && shareData) {
+    return <ShareView data={shareData} onClose={handleCloseShare} />;
+  }
 
   // Loading state
   if (isLoading) {
@@ -165,7 +210,7 @@ export default function App() {
               Welcome to <span className="gradient-text">PRD Pipeline</span>
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px', textAlign: 'center', marginBottom: '32px' }}>
-              Sign in with your Rian credentials
+              {pendingShareToken ? 'Sign in to view the shared PRD' : 'Sign in with your Rian credentials'}
             </p>
 
             {loginError && (
@@ -247,7 +292,11 @@ export default function App() {
       )}
 
       {currentStage === 5 && pipelineData && (
-        <ReviewStage pipelineData={pipelineData} onFinalize={handleFinalize} />
+        <ReviewStage
+          pipelineData={pipelineData}
+          intakeData={{ messages: intakeMessages, structuredData }}
+          onFinalize={handleFinalize}
+        />
       )}
 
       {currentStage === 6 && finalPRD && (

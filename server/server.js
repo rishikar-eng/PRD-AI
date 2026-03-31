@@ -41,12 +41,14 @@ import authRoutes from './routes/auth.js';
 import intakeRoutes from './routes/intake.js';
 import agentsRoutes from './routes/agents.js';
 import projectsRoutes from './routes/projects.js';
+import shareRoutes from './routes/share.js';
 
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/intake', intakeRoutes);
 app.use('/api/agents', agentsRoutes);
 app.use('/api/projects', projectsRoutes);
+app.use('/api/share', shareRoutes);
 
 // Error handling
 app.use((err, req, res, next) => {

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import PRDDocument from './PRDDocument';
 import CommentPanel from './CommentPanel';
+import { API_URL } from '../config';
 
-export default function ReviewStage({ pipelineData, onFinalize }) {
+export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
   const [comments, setComments] = useState(() => {
     // Combine QC and Debate comments
     const allComments = [
@@ -13,6 +14,126 @@ export default function ReviewStage({ pipelineData, onFinalize }) {
   });
 
   const [highlightedSections, setHighlightedSections] = useState([]);
+  const [activeTab, setActiveTab] = useState('comments');
+  const [shareUrl, setShareUrl] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // Local PRD state so it can be updated after regeneration
+  const [prdText, setPrdText] = useState(pipelineData.prd);
+  const prdAccumulator = useRef('');
+
+  // Local intake messages — starts from passed-in history, grows with continued conversation
+  const [localMessages, setLocalMessages] = useState(intakeData?.messages || []);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+
+  const handleSendIntakeMessage = async (text) => {
+    setLocalMessages(prev => [...prev, { role: 'user', content: text }]);
+    setHasNewMessages(true);
+    setIsSendingMessage(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/intake/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reply: text }),
+      });
+      const data = await response.json();
+
+      if (data.complete) {
+        setLocalMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '✓ Got it! Click "Regenerate PRD" to update your document with these changes.',
+        }]);
+      } else {
+        setLocalMessages(prev => [...prev, { role: 'assistant', content: data.question }]);
+      }
+    } catch (error) {
+      setLocalMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Please try again.' }]);
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const handleRegeneratePRD = async () => {
+    setIsRegenerating(true);
+    setPrdText('');
+    prdAccumulator.current = '';
+
+    try {
+      // Step 1: Extract fresh structuredData from updated conversation
+      const extractRes = await fetch(`${API_URL}/api/intake/extract`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const { structuredData } = await extractRes.json();
+
+      // Step 2: Stream new PRD from writer agent
+      const writerRes = await fetch(`${API_URL}/api/agents/writer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ structuredData }),
+      });
+
+      const reader = writerRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const chunk = JSON.parse(line.slice(6));
+            if (chunk.content) {
+              prdAccumulator.current += chunk.content;
+              setPrdText(prdAccumulator.current);
+            }
+            if (chunk.done) {
+              setIsRegenerating(false);
+              setHasNewMessages(false);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      setIsRegenerating(false);
+      alert('Failed to regenerate PRD. Please try again.');
+    }
+  };
+
+  const handleShare = async () => {
+    setShareLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/projects/current/share`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.error || 'Failed to generate share link');
+        return;
+      }
+      setShareUrl(data.shareUrl);
+    } catch (error) {
+      alert('Failed to generate share link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
 
   const handleCommentAction = (commentId, action, ownerResponse) => {
     setComments(prev => prev.map(comment => {
@@ -38,6 +159,19 @@ export default function ReviewStage({ pipelineData, onFinalize }) {
   const allActioned = comments.every(c => c.status === 'accepted' || c.status === 'rejected');
   const averageScore = pipelineData.qcResult?.scores?.average || 0;
 
+  // Parse actual section titles from the live PRD text for fuzzy highlight matching
+  const prdSections = prdText
+    ? prdText.split(/\n## /).slice(1).map(s => s.split('\n')[0].trim())
+    : [];
+
+  const handleHighlightSection = (sectionTitle) => {
+    setHighlightedSections(prev =>
+      prev.includes(sectionTitle)
+        ? prev.filter(s => s !== sectionTitle)
+        : [...prev, sectionTitle]
+    );
+  };
+
   return (
     <div style={{ marginTop: '80px' }}>
       {/* Header */}
@@ -52,6 +186,41 @@ export default function ReviewStage({ pipelineData, onFinalize }) {
         <p style={{ color: 'var(--text-secondary)', fontSize: '15px', marginBottom: '16px' }}>
           Review and action all agent comments to finalize the PRD
         </p>
+
+        {/* Share */}
+        <div style={{ marginBottom: '16px' }}>
+          {!shareUrl ? (
+            <button
+              className="btn-secondary"
+              onClick={handleShare}
+              disabled={shareLoading}
+              style={{ fontSize: '13px' }}
+            >
+              {shareLoading ? 'Generating link...' : 'Share PRD'}
+            </button>
+          ) : (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              background: 'rgba(74, 222, 128, 0.05)',
+              border: '1px solid rgba(74, 222, 128, 0.2)',
+              borderRadius: 'var(--radius-xs)',
+            }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {shareUrl}
+              </span>
+              <button
+                className="btn-secondary"
+                onClick={handleCopyLink}
+                style={{ fontSize: '12px', padding: '4px 10px', flexShrink: 0 }}
+              >
+                {shareCopied ? 'Copied!' : 'Copy Link'}
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Score Summary */}
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -101,8 +270,9 @@ export default function ReviewStage({ pipelineData, onFinalize }) {
           flexDirection: 'column',
         }}>
           <PRDDocument
-            prdText={pipelineData.prd}
+            prdText={prdText}
             highlightedSections={highlightedSections}
+            isRegenerating={isRegenerating}
           />
         </div>
 
@@ -116,6 +286,18 @@ export default function ReviewStage({ pipelineData, onFinalize }) {
           <CommentPanel
             comments={comments}
             onCommentAction={handleCommentAction}
+            intakeData={intakeData}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            prdSections={prdSections}
+            highlightedSections={highlightedSections}
+            onHighlightSection={handleHighlightSection}
+            localMessages={localMessages}
+            isSendingMessage={isSendingMessage}
+            hasNewMessages={hasNewMessages}
+            isRegenerating={isRegenerating}
+            onSendMessage={handleSendIntakeMessage}
+            onRegeneratePRD={handleRegeneratePRD}
           />
         </div>
       </div>
@@ -130,7 +312,7 @@ export default function ReviewStage({ pipelineData, onFinalize }) {
         }}>
           <button
             className="btn-primary"
-            onClick={() => onFinalize({ prd: pipelineData.prd, comments })}
+            onClick={() => onFinalize({ prd: prdText, comments })}
             style={{
               fontSize: '16px',
               padding: '16px 32px',

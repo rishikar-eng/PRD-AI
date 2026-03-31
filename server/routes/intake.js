@@ -136,6 +136,30 @@ router.post('/reply', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/intake/extract
+ * Force-extract structuredData from current conversation (no INTAKE_COMPLETE needed)
+ * Used when continuing the conversation from the Review stage
+ */
+router.post('/extract', requireAuth, async (req, res) => {
+  try {
+    const state = req.session.pipelineState;
+    const history = state.intake.conversationHistory;
+
+    if (!history || history.length === 0) {
+      return res.status(400).json({ error: 'No conversation history found' });
+    }
+
+    const structuredData = await extractStructuredData(history, state.role);
+    state.intake.structuredData = structuredData;
+
+    res.json({ structuredData });
+  } catch (error) {
+    console.error('Extract error:', error);
+    res.status(500).json({ error: 'Failed to extract structured data' });
+  }
+});
+
+/**
  * Helper: Extract structured data from conversation
  */
 async function extractStructuredData(history, role) {
