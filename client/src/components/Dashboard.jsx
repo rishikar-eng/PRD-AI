@@ -22,7 +22,7 @@ export default function Dashboard({ onNewProject, onResumeProject }) {
     setIsLoading(true);
     setError('');
     try {
-      const response = await fetch(`${API_URL}/api/projects', {
+      const response = await fetch(`${API_URL}/api/projects`, {
         credentials: 'include',
       });
 
@@ -43,7 +43,7 @@ export default function Dashboard({ onNewProject, onResumeProject }) {
     if (!confirm('Delete this project? This cannot be undone.')) return;
 
     try {
-      const response = await fetch(`/api/projects/${projectId}`, {
+      const response = await fetch(`/api/projects/${projectId}``, {
         method: 'DELETE',
         credentials: 'include',
       });

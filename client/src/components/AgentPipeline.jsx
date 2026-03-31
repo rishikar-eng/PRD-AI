@@ -24,7 +24,7 @@ export default function AgentPipeline({ structuredData, onComplete }) {
     prdAccumulator.current = ''; // Reset accumulator
 
     try {
-      const response = await fetch(`${API_URL}/api/agents/writer', {
+      const response = await fetch(`${API_URL}/api/agents/writer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -87,7 +87,7 @@ export default function AgentPipeline({ structuredData, onComplete }) {
     setIsQCLoading(true); // Bug fix: add loading state
 
     try {
-      const response = await fetch(`${API_URL}/api/agents/qc', {
+      const response = await fetch(`${API_URL}/api/agents/qc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -119,7 +119,7 @@ export default function AgentPipeline({ structuredData, onComplete }) {
     setIsDebateLoading(true); // Bug fix: add loading state
 
     try {
-      const response = await fetch(`${API_URL}/api/agents/debate', {
+      const response = await fetch(`${API_URL}/api/agents/debate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
