@@ -1,0 +1,3 @@
+# Netlify redirects
+/api/*  https://prd-pipeline-api.onrender.com/api/:splat  200
+/*  /index.html  200

@@ -1,0 +1,40 @@
+services:
+  # Backend API Server
+  - type: web
+    name: prd-pipeline-api
+    runtime: node
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RIAN_API_BASE_URL
+        value: https://api.rian.io/v1
+      - key: RIAN_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        value: https://ivihmzkultzpmohjuvei.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://prd-pipeline.onrender.com
+
+  # Frontend Static Site
+  - type: web
+    name: prd-pipeline
+    runtime: static
+    buildCommand: cd client && npm install && npm run build
+    staticPublishPath: ./client/dist
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://prd-pipeline-api.onrender.com/api/*
+    envVars:
+      - key: VITE_API_URL
+        value: https://prd-pipeline-api.onrender.com
