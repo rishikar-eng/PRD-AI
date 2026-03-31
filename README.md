@@ -102,3 +102,4 @@ Uses existing Rian API authentication:
 - **Auth**: Rian API (api.rian.io/v1)
 - **State**: In-memory session storage
 - **Styling**: CSS custom properties (Rian brand)
+# Deployed Tue Mar 31 13:14:48 IST 2026
