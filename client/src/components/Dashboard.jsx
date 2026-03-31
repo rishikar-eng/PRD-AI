@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 
 /**
@@ -21,7 +22,7 @@ export default function Dashboard({ onNewProject, onResumeProject }) {
     setIsLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/projects', {
+      const response = await fetch(`${API_URL}/api/projects', {
         credentials: 'include',
       });
 

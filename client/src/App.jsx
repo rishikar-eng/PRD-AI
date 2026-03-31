@@ -6,6 +6,7 @@ import EntryMode from './components/EntryMode';
 import IntakeChat from './components/IntakeChat';
 import AgentPipeline from './components/AgentPipeline';
 import ReviewStage from './components/ReviewStage';
+import { API_URL } from './config';
 import './styles/globals.css';
 import './styles/components.css';
 
@@ -27,7 +28,7 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('/api/auth/me', {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
         credentials: 'include',
       });
 
@@ -46,7 +47,7 @@ export default function App() {
     setLoginError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -76,7 +77,7 @@ export default function App() {
 
   const handleResumeProject = async (projectId) => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/restore`, {
+      const response = await fetch(`${API_URL}/api/projects/${projectId}/restore`, {
         method: 'POST',
         credentials: 'include',
       });

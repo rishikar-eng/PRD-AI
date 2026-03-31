@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useEffect, useRef } from 'react';
 
 export default function IntakeChat({ entryData, onComplete }) {
@@ -20,7 +21,7 @@ export default function IntakeChat({ entryData, onComplete }) {
   const startIntake = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/intake/start', {
+      const response = await fetch(`${API_URL}/api/intake/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -51,7 +52,7 @@ export default function IntakeChat({ entryData, onComplete }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/intake/reply', {
+      const response = await fetch(`${API_URL}/api/intake/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
