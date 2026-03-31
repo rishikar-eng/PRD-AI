@@ -183,6 +183,8 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
     const { id } = req.params;
     const userEmail = req.session.userEmail;
 
+    console.log('Restore request:', { id, userEmail });
+
     const { data, error } = await supabase
       .from('projects')
       .select('stage, session_data')
@@ -190,7 +192,10 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
       .eq('user_email', userEmail)
       .single();
 
+    console.log('Supabase result:', { data: !!data, error: error?.message });
+
     if (error || !data) {
+      console.error('Project not found:', error);
       return res.status(404).json({ error: 'Project not found' });
     }
 
@@ -200,9 +205,11 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
       projectId: id, // Track which project is loaded
     };
 
+    console.log('Session restored successfully');
+
     res.json({
       stage: data.stage,
-      session_data: data.session_data,
+      sessionData: data.session_data, // Changed key name to match frontend
     });
   } catch (error) {
     console.error('Restore project error:', error);

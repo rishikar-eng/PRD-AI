@@ -81,25 +81,34 @@ export default function App() {
         credentials: 'include',
       });
 
-      if (!response.ok) throw new Error('Failed to restore project');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to restore project');
+      }
 
       const data = await response.json();
+      console.log('Restored data:', data);
 
       // Restore app state from project session data
       const state = data.sessionData;
-      setCurrentStage(state.stage);
-      setEntryData(state.input);
-      setStructuredData(state.intake.structuredData);
 
-      if (state.prd.v0) {
+      if (!state) {
+        throw new Error('No session data in response');
+      }
+
+      setCurrentStage(state.stage);
+      setEntryData(state.input || null);
+      setStructuredData(state.intake?.structuredData || null);
+
+      if (state.prd?.v0) {
         setPipelineData({
           prd: state.prd.v0,
-          qcResult: state.prd.qcResult,
-          debateResult: state.prd.debateResult,
+          qcResult: state.prd.qcResult || {},
+          debateResult: state.prd.debateResult || {},
         });
       }
 
-      if (state.prd.finalPRD) {
+      if (state.prd?.finalPRD) {
         setFinalPRD({
           prd: state.prd.finalPRD,
           comments: state.prd.allComments || [],
@@ -107,7 +116,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Resume project error:', error);
-      alert('Failed to resume project');
+      alert('Failed to resume project: ' + error.message);
     }
   };
 
