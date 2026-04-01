@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1); // Trust Render's load balancer for secure cookies
 const PORT = process.env.PORT || 3001;
 
 // Middleware
