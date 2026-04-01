@@ -23,9 +23,9 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false
       - key: CORS_ORIGIN
-        value: https://prd-pipeline.onrender.com
+        value: https://prd-ai-55h9.onrender.com
       - key: FRONTEND_URL
-        value: https://prd-pipeline.onrender.com
+        value: https://prd-ai-55h9.onrender.com
 
   # Frontend Static Site
   - type: web
@@ -36,7 +36,7 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://prd-pipeline-api.onrender.com/api/*
+        destination: https://prd-ai-api.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html
