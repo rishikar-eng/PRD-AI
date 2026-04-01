@@ -40,6 +40,4 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://prd-pipeline-api.onrender.com
+    envVars: []
