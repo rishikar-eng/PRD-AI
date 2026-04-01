@@ -1,9 +1,8 @@
 services:
-  # Backend API Server
   - type: web
-    name: prd-pipeline-api
+    name: prd-ai
     runtime: node
-    buildCommand: cd server && npm install
+    buildCommand: cd client && npm install && npm run build && cd ../server && npm install
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
@@ -23,21 +22,6 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false
       - key: CORS_ORIGIN
-        value: https://prd-ai-55h9.onrender.com
+        value: https://prd-ai-api.onrender.com
       - key: FRONTEND_URL
-        value: https://prd-ai-55h9.onrender.com
-
-  # Frontend Static Site
-  - type: web
-    name: prd-pipeline
-    runtime: static
-    buildCommand: cd client && npm install && npm run build
-    staticPublishPath: ./client/dist
-    routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://prd-ai-api.onrender.com/api/*
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars: []
+        value: https://prd-ai-api.onrender.com
