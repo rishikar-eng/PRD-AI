@@ -58,6 +58,12 @@ app.use('/api/share', shareRoutes);
 // Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  console.log('Serving static files from:', clientDist);
+  const fs = await import('fs');
+  console.log('Directory exists:', fs.existsSync(clientDist));
+  if (fs.existsSync(clientDist)) {
+    console.log('Files in dist:', fs.readdirSync(clientDist));
+  }
   app.use(express.static(clientDist));
   // SPA catch-all — serve index.html for all non-API routes
   app.get('*', (req, res) => {
