@@ -1,0 +1,289 @@
+<!-- PLACEHOLDER: Replace this file with the actual rian_theme_reference.html before Stage 2 goes live.
+     The real file will be provided separately. -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rian Design System Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #000000;
+      --bg-surface: #0a0a0a;
+      --bg-card: #111111;
+      --bg-card-hover: #161616;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(255, 255, 255, 0.12);
+      --border-active: rgba(255, 255, 255, 0.20);
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --text-tertiary: #555555;
+      --pink: #f472b6;
+      --pink-hot: #ec4899;
+      --green: #86efac;
+      --green-bright: #4ade80;
+      --teal: #5eead4;
+      --orange: #fb923c;
+      --yellow: #facc15;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding: 40px 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 20px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #f472b6 0%, #fb923c 40%, #4ade80 70%, #5eead4 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .card:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-card-hover);
+    }
+
+    .btn-primary {
+      display: inline-block;
+      padding: 12px 28px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #ec4899, #fb923c 60%, #facc15);
+      color: #000;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.88;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      display: inline-block;
+      padding: 10px 22px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .color-swatch {
+      padding: 20px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .color-swatch-content {
+      width: 100%;
+      height: 80px;
+      border-radius: var(--radius-xs);
+      margin-bottom: 12px;
+    }
+
+    code {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--teal);
+    }
+
+    .spacing-demo {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .spacing-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      padding: 12px;
+      min-width: 150px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Rian <span class="gradient-text">Design System</span></h1>
+    <p style="color: var(--text-secondary); font-size: 15px; margin-bottom: 40px;">
+      This is a placeholder reference. Replace with the actual rian_theme_reference.html before Stage 2 goes live.
+    </p>
+
+    <h2>Color Palette</h2>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-swatch-content" style="background: #000000;"></div>
+        <div style="font-size: 13px; font-weight: 600;">Background</div>
+        <code>#000000</code>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-content" style="background: #111111;"></div>
+        <div style="font-size: 13px; font-weight: 600;">Card</div>
+        <code>#111111</code>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-content" style="background: #f472b6;"></div>
+        <div style="font-size: 13px; font-weight: 600;">Pink</div>
+        <code>#f472b6</code>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-content" style="background: #fb923c;"></div>
+        <div style="font-size: 13px; font-weight: 600;">Orange</div>
+        <code>#fb923c</code>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-content" style="background: #4ade80;"></div>
+        <div style="font-size: 13px; font-weight: 600;">Green</div>
+        <code>#4ade80</code>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-content" style="background: #5eead4;"></div>
+        <div style="font-size: 13px; font-weight: 600;">Teal</div>
+        <code>#5eead4</code>
+      </div>
+    </div>
+
+    <h2>Typography</h2>
+    <div class="card">
+      <h3>Font Family</h3>
+      <p style="margin-bottom: 16px;">Plus Jakarta Sans (Google Fonts)</p>
+
+      <h3>Font Weights</h3>
+      <p style="font-weight: 800; margin-bottom: 8px;">800 — Hero titles, logo, primary buttons</p>
+      <p style="font-weight: 700; margin-bottom: 8px;">700 — Section headings, badges</p>
+      <p style="font-weight: 600; margin-bottom: 8px;">600 — Card titles, labels</p>
+      <p style="font-weight: 400; margin-bottom: 8px;">400 — Body text</p>
+      <p style="font-weight: 300;">300 — Hints, tertiary text</p>
+    </div>
+
+    <h2>Buttons</h2>
+    <div class="card">
+      <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+        <button class="btn-primary">Primary Button</button>
+        <button class="btn-secondary">Secondary Button</button>
+      </div>
+    </div>
+
+    <h2>Cards</h2>
+    <div class="card">
+      <h3>Standard Card</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 16px;">
+        Cards use <code>#111111</code> background with <code>rgba(255,255,255,0.06)</code> border.
+        Border radius is <code>14px</code>.
+      </p>
+      <p style="color: var(--text-secondary);">
+        On hover, border changes to <code>rgba(255,255,255,0.12)</code> and background to <code>#161616</code>.
+      </p>
+    </div>
+
+    <h2>Spacing</h2>
+    <div class="spacing-demo">
+      <div class="spacing-item">
+        <div style="font-weight: 600; margin-bottom: 8px;">Border Radius</div>
+        <div style="font-size: 13px; color: var(--text-secondary);">
+          <code>14px</code> — cards<br>
+          <code>10px</code> — buttons, inputs<br>
+          <code>6px</code> — small elements
+        </div>
+      </div>
+      <div class="spacing-item">
+        <div style="font-weight: 600; margin-bottom: 8px;">Padding</div>
+        <div style="font-size: 13px; color: var(--text-secondary);">
+          <code>24px</code> — cards<br>
+          <code>12px 28px</code> — primary buttons<br>
+          <code>10px 22px</code> — secondary buttons
+        </div>
+      </div>
+    </div>
+
+    <h2>Gradient (Primary CTAs Only)</h2>
+    <div class="card">
+      <p style="margin-bottom: 16px;">
+        The pink → orange → green gradient is reserved for hero text and primary action buttons only.
+      </p>
+      <code>linear-gradient(135deg, #ec4899, #fb923c 60%, #facc15)</code>
+    </div>
+  </div>
+</body>
+</html>

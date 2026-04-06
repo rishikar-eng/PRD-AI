@@ -25,12 +25,23 @@ function getOpenAIClient() {
 export async function chatCompletion(messages, options = {}) {
   try {
     const client = getOpenAIClient();
+
+    // Normalize options - convert maxTokens to max_tokens if provided
+    const apiOptions = { ...options };
+    if (apiOptions.maxTokens) {
+      apiOptions.max_tokens = apiOptions.maxTokens;
+      delete apiOptions.maxTokens;
+    }
+
+    // Remove temperature from apiOptions to avoid duplication
+    const { temperature, max_tokens, ...restOptions } = apiOptions;
+
     const response = await client.chat.completions.create({
       model: MODEL,
       messages,
-      temperature: options.temperature || 0.7,
-      max_tokens: options.maxTokens || 4000,
-      ...options,
+      temperature: temperature || 0.7,
+      max_tokens: max_tokens || 4000,
+      ...restOptions,
     });
     return response.choices[0].message.content;
   } catch (error) {
@@ -42,13 +53,24 @@ export async function chatCompletion(messages, options = {}) {
 export async function streamChatCompletion(messages, options = {}) {
   try {
     const client = getOpenAIClient();
+
+    // Normalize options - convert maxTokens to max_tokens if provided
+    const apiOptions = { ...options };
+    if (apiOptions.maxTokens) {
+      apiOptions.max_tokens = apiOptions.maxTokens;
+      delete apiOptions.maxTokens;
+    }
+
+    // Remove temperature from apiOptions to avoid duplication
+    const { temperature, max_tokens, ...restOptions } = apiOptions;
+
     const stream = await client.chat.completions.create({
       model: MODEL,
       messages,
-      temperature: options.temperature || 0.7,
-      max_tokens: options.maxTokens || 4000,
+      temperature: temperature || 0.7,
+      max_tokens: max_tokens || 4000,
       stream: true,
-      ...options,
+      ...restOptions,
     });
     return stream;
   } catch (error) {

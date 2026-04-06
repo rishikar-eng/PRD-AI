@@ -32,11 +32,31 @@ export function attachSession(req, res, next) {
         structuredData: {},
       },
       prd: {
-        v0: '',
-        qcResult: { scores: {}, comments: [] },
-        debateResult: { escalated: false, escalationReason: null, comments: [] },
+        v0: '', // Writer agent output
+        v0Final: '', // PRD after all reviews and edits
+        agentFeedback: {
+          deliveryReality: { comments: [], ownerResponse: '' },
+          technicalFeasibility: { comments: [], ownerResponse: '' },
+          businessValue: { comments: [], ownerResponse: '' },
+          security: { comments: [], ownerResponse: '' },
+          debate: { comments: [], escalated: false, escalationReason: null },
+        },
+        qualityGate: { hardBlocks: [], softWarnings: [], canShip: true },
         allComments: [],
         finalPRD: '',
+      },
+      externalPRD: {
+        uploaded: false,
+        originalPRD: '', // The PRD from our pipeline
+        externalPRD: '', // The uploaded external PRD
+        agentFeedback: {
+          deliveryReality: { comments: [], ownerResponse: '' },
+          technicalFeasibility: { comments: [], ownerResponse: '' },
+          businessValue: { comments: [], ownerResponse: '' },
+          security: { comments: [], ownerResponse: '' },
+          debate: { comments: [], escalated: false, escalationReason: null },
+        },
+        claudeContext: '', // Generated claude.md content
       },
       review: {
         commentActions: {},

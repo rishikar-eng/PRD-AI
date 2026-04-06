@@ -1,8 +1,13 @@
 import express from 'express';
 import { chatCompletion, streamChatCompletion } from '../services/ai.js';
 import { getWriterSystemPrompt } from '../prompts/writer.js';
-import { getQCSystemPrompt } from '../prompts/qc.js';
+import { getDeliveryRealityPrompt } from '../prompts/deliveryReality.js';
+import { getTechnicalFeasibilityPrompt } from '../prompts/technicalFeasibility.js';
+import { getBusinessValuePrompt } from '../prompts/businessValue.js';
+import { getSecurityPrompt } from '../prompts/security.js';
 import { getDebateSystemPrompt } from '../prompts/debate.js';
+import { getQualityGatePrompt } from '../prompts/qualityGate.js';
+import { getClaudeContextPrompt } from '../prompts/claudeContext.js';
 import { requireAuth } from '../middleware/auth.js';
 import { supabase } from '../services/db.js';
 
@@ -31,6 +36,7 @@ FEATURE: ${structuredData.featureName || 'Untitled Feature'}
 PROBLEM: ${structuredData.problem || ''}
 PRIMARY USERS: ${structuredData.users || ''}
 SUCCESS OUTCOME: ${structuredData.successOutcome || ''}
+SUCCESS METRIC: ${structuredData.successMetric || ''}
 IN SCOPE: ${structuredData.inScope || ''}
 OUT OF SCOPE: ${structuredData.outOfScope || ''}
 USER FLOWS: ${structuredData.userFlows || ''}
@@ -77,10 +83,10 @@ Write the complete PRD now.`;
 });
 
 /**
- * POST /api/agents/qc
- * QC review of PRD
+ * POST /api/agents/delivery-reality
+ * Delivery Reality Agent - First specialist review
  */
-router.post('/qc', requireAuth, async (req, res) => {
+router.post('/delivery-reality', requireAuth, async (req, res) => {
   const { prdText } = req.body;
 
   if (!prdText) {
@@ -88,7 +94,7 @@ router.post('/qc', requireAuth, async (req, res) => {
   }
 
   try {
-    const systemPrompt = getQCSystemPrompt();
+    const systemPrompt = getDeliveryRealityPrompt();
     const userPrompt = `Review this PRD:\n\n${prdText}`;
 
     const response = await chatCompletion([
@@ -99,43 +105,203 @@ router.post('/qc', requireAuth, async (req, res) => {
     // Parse JSON from response
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('No valid JSON in QC response');
+      throw new Error('No valid JSON in Delivery Reality response');
     }
 
-    const qcResult = JSON.parse(jsonMatch[0]);
+    const result = JSON.parse(jsonMatch[0]);
 
     // Store in session
     const state = req.session.pipelineState;
-    state.prd.qcResult = qcResult;
+    state.prd.agentFeedback.deliveryReality.comments = result.comments || [];
 
-    res.json(qcResult);
+    res.json(result);
   } catch (error) {
-    console.error('QC agent error:', error);
-    res.status(500).json({ error: 'QC agent failed' });
+    console.error('Delivery Reality agent error:', error);
+    res.status(500).json({ error: 'Delivery Reality agent failed' });
   }
 });
 
 /**
- * POST /api/agents/debate
- * Debate agent adversarial review
+ * POST /api/agents/technical-feasibility
+ * Technical Feasibility Agent - Second specialist review
  */
-router.post('/debate', requireAuth, async (req, res) => {
-  const { prdText, qcScores } = req.body;
+router.post('/technical-feasibility', requireAuth, async (req, res) => {
+  const { prdText } = req.body;
 
-  if (!prdText || !qcScores) {
-    return res.status(400).json({ error: 'PRD text and QC scores required' });
+  if (!prdText) {
+    return res.status(400).json({ error: 'PRD text required' });
   }
 
   try {
-    const systemPrompt = getDebateSystemPrompt(qcScores);
-    const userPrompt = `Perform adversarial review of this PRD:\n\n${prdText}`;
+    const state = req.session.pipelineState;
+
+    // Build context: PRD + previous agent feedback + owner responses
+    let context = `PRD to review:\n\n${prdText}\n\n`;
+
+    // Add Delivery Reality feedback if exists
+    if (state.prd.agentFeedback.deliveryReality.comments.length > 0) {
+      context += `Previous Agent Feedback:\n\n`;
+      context += `DELIVERY REALITY AGENT:\n${JSON.stringify(state.prd.agentFeedback.deliveryReality.comments, null, 2)}\n`;
+      context += `OWNER RESPONSE: ${state.prd.agentFeedback.deliveryReality.ownerResponse || 'No response yet'}\n\n`;
+    }
+
+    const systemPrompt = getTechnicalFeasibilityPrompt();
+    const userPrompt = context + `\nReview this PRD from a technical feasibility perspective.`;
 
     const response = await chatCompletion([
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ]);
 
-    // Parse JSON from response
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in Technical Feasibility response');
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
+    state.prd.agentFeedback.technicalFeasibility.comments = result.comments || [];
+
+    res.json(result);
+  } catch (error) {
+    console.error('Technical Feasibility agent error:', error);
+    res.status(500).json({ error: 'Technical Feasibility agent failed' });
+  }
+});
+
+/**
+ * POST /api/agents/business-value
+ * Business Value Agent - Third specialist review
+ */
+router.post('/business-value', requireAuth, async (req, res) => {
+  const { prdText } = req.body;
+
+  if (!prdText) {
+    return res.status(400).json({ error: 'PRD text required' });
+  }
+
+  try {
+    const state = req.session.pipelineState;
+
+    // Build context with all previous feedback
+    let context = `PRD to review:\n\n${prdText}\n\nPrevious Agent Feedback:\n\n`;
+
+    if (state.prd.agentFeedback.deliveryReality.comments.length > 0) {
+      context += `DELIVERY REALITY:\n${JSON.stringify(state.prd.agentFeedback.deliveryReality.comments, null, 2)}\n`;
+      context += `OWNER: ${state.prd.agentFeedback.deliveryReality.ownerResponse || 'No response'}\n\n`;
+    }
+
+    if (state.prd.agentFeedback.technicalFeasibility.comments.length > 0) {
+      context += `TECHNICAL FEASIBILITY:\n${JSON.stringify(state.prd.agentFeedback.technicalFeasibility.comments, null, 2)}\n`;
+      context += `OWNER: ${state.prd.agentFeedback.technicalFeasibility.ownerResponse || 'No response'}\n\n`;
+    }
+
+    const systemPrompt = getBusinessValuePrompt();
+    const userPrompt = context + `\nReview this PRD from a business value perspective.`;
+
+    const response = await chatCompletion([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in Business Value response');
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
+    state.prd.agentFeedback.businessValue.comments = result.comments || [];
+
+    res.json(result);
+  } catch (error) {
+    console.error('Business Value agent error:', error);
+    res.status(500).json({ error: 'Business Value agent failed' });
+  }
+});
+
+/**
+ * POST /api/agents/security
+ * Security Agent - Fourth specialist review
+ */
+router.post('/security', requireAuth, async (req, res) => {
+  const { prdText } = req.body;
+
+  if (!prdText) {
+    return res.status(400).json({ error: 'PRD text required' });
+  }
+
+  try {
+    const state = req.session.pipelineState;
+
+    // Build context with all previous feedback
+    let context = `PRD to review:\n\n${prdText}\n\nPrevious Agent Feedback:\n\n`;
+
+    const agents = ['deliveryReality', 'technicalFeasibility', 'businessValue'];
+    agents.forEach(agent => {
+      if (state.prd.agentFeedback[agent].comments.length > 0) {
+        context += `${agent.toUpperCase()}:\n${JSON.stringify(state.prd.agentFeedback[agent].comments, null, 2)}\n`;
+        context += `OWNER: ${state.prd.agentFeedback[agent].ownerResponse || 'No response'}\n\n`;
+      }
+    });
+
+    const systemPrompt = getSecurityPrompt();
+    const userPrompt = context + `\nReview this PRD from a security perspective.`;
+
+    const response = await chatCompletion([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in Security response');
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
+    state.prd.agentFeedback.security.comments = result.comments || [];
+
+    res.json(result);
+  } catch (error) {
+    console.error('Security agent error:', error);
+    res.status(500).json({ error: 'Security agent failed' });
+  }
+});
+
+/**
+ * POST /api/agents/debate
+ * Debate Agent - Meta-layer review of all specialist feedback
+ */
+router.post('/debate', requireAuth, async (req, res) => {
+  try {
+    const state = req.session.pipelineState;
+
+    // Build specialist feedback object for debate agent
+    const specialistFeedback = {
+      deliveryReality: {
+        comments: state.prd.agentFeedback.deliveryReality.comments,
+        ownerResponse: state.prd.agentFeedback.deliveryReality.ownerResponse,
+      },
+      technicalFeasibility: {
+        comments: state.prd.agentFeedback.technicalFeasibility.comments,
+        ownerResponse: state.prd.agentFeedback.technicalFeasibility.ownerResponse,
+      },
+      businessValue: {
+        comments: state.prd.agentFeedback.businessValue.comments,
+        ownerResponse: state.prd.agentFeedback.businessValue.ownerResponse,
+      },
+      security: {
+        comments: state.prd.agentFeedback.security.comments,
+        ownerResponse: state.prd.agentFeedback.security.ownerResponse,
+      },
+    };
+
+    const systemPrompt = getDebateSystemPrompt(specialistFeedback);
+    const userPrompt = `Review the specialist feedback and identify meta-level concerns.`;
+
+    const response = await chatCompletion([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('No valid JSON in Debate response');
@@ -144,13 +310,17 @@ router.post('/debate', requireAuth, async (req, res) => {
     const debateResult = JSON.parse(jsonMatch[0]);
 
     // Store in session
-    const state = req.session.pipelineState;
-    state.prd.debateResult = debateResult;
+    state.prd.agentFeedback.debate.comments = debateResult.comments || [];
+    state.prd.agentFeedback.debate.escalated = debateResult.escalated || false;
+    state.prd.agentFeedback.debate.escalationReason = debateResult.escalationReason || null;
 
-    // Combine all comments
+    // Combine all comments for review stage
     state.prd.allComments = [
-      ...(state.prd.qcResult.comments || []),
-      ...(debateResult.comments || []),
+      ...state.prd.agentFeedback.deliveryReality.comments,
+      ...state.prd.agentFeedback.technicalFeasibility.comments,
+      ...state.prd.agentFeedback.businessValue.comments,
+      ...state.prd.agentFeedback.security.comments,
+      ...state.prd.agentFeedback.debate.comments,
     ];
 
     // Move to review stage and auto-save
@@ -161,6 +331,132 @@ router.post('/debate', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Debate agent error:', error);
     res.status(500).json({ error: 'Debate agent failed' });
+  }
+});
+
+/**
+ * POST /api/agents/owner-response
+ * Save owner's response to a specialist agent
+ */
+router.post('/owner-response', requireAuth, async (req, res) => {
+  const { agent, response } = req.body;
+
+  if (!agent || !response) {
+    return res.status(400).json({ error: 'Agent name and response required' });
+  }
+
+  const validAgents = ['deliveryReality', 'technicalFeasibility', 'businessValue', 'security'];
+  if (!validAgents.includes(agent)) {
+    return res.status(400).json({ error: 'Invalid agent name' });
+  }
+
+  try {
+    const state = req.session.pipelineState;
+    state.prd.agentFeedback[agent].ownerResponse = response;
+
+    // Auto-save after owner response
+    await saveProject(req);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Owner response error:', error);
+    res.status(500).json({ error: 'Failed to save owner response' });
+  }
+});
+
+/**
+ * POST /api/agents/generate-claude-context
+ * Generate claude.md implementation context from external PRD review
+ */
+router.post('/generate-claude-context', requireAuth, async (req, res) => {
+  const { originalPRD, externalPRD } = req.body;
+
+  if (!originalPRD || !externalPRD) {
+    return res.status(400).json({ error: 'Both originalPRD and externalPRD required' });
+  }
+
+  try {
+    const state = req.session.pipelineState;
+
+    // Extract agent feedback and owner responses from externalPRD session data
+    const agentFeedback = state.externalPRD?.agentFeedback || state.prd?.agentFeedback || {};
+    const ownerResponses = {
+      deliveryReality: agentFeedback.deliveryReality?.ownerResponse || '',
+      technicalFeasibility: agentFeedback.technicalFeasibility?.ownerResponse || '',
+      businessValue: agentFeedback.businessValue?.ownerResponse || '',
+      security: agentFeedback.security?.ownerResponse || '',
+    };
+
+    const prompt = getClaudeContextPrompt(originalPRD, externalPRD, agentFeedback, ownerResponses);
+
+    const claudeContext = await chatCompletion([
+      { role: 'user', content: prompt },
+    ], { temperature: 0.4, maxTokens: 6000 });
+
+    // Save external PRD data to session
+    if (!state.externalPRD) {
+      state.externalPRD = {
+        uploaded: false,
+        originalPRD: '',
+        externalPRD: '',
+        agentFeedback: {},
+        claudeContext: '',
+      };
+    }
+
+    state.externalPRD.uploaded = true;
+    state.externalPRD.originalPRD = originalPRD;
+    state.externalPRD.externalPRD = externalPRD;
+    state.externalPRD.agentFeedback = agentFeedback;
+    state.externalPRD.claudeContext = claudeContext;
+    state.stage = 6.5; // Mark as external PRD complete
+
+    // Save to Supabase
+    await saveProject(req);
+
+    res.json({ claudeContext });
+  } catch (error) {
+    console.error('Claude context generation error:', error);
+    res.status(500).json({ error: 'Failed to generate claude.md' });
+  }
+});
+
+/**
+ * POST /api/agents/quality-gate
+ * Run pre-flight quality checks on final PRD
+ */
+router.post('/quality-gate', requireAuth, async (req, res) => {
+  const { prdText } = req.body;
+
+  if (!prdText) {
+    return res.status(400).json({ error: 'PRD text required' });
+  }
+
+  try {
+    const systemPrompt = getQualityGatePrompt();
+    const userPrompt = `Run quality gate checks on this PRD:\n\n${prdText}`;
+
+    const response = await chatCompletion([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+
+    // Parse JSON from response
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in Quality Gate response');
+    }
+
+    const qualityGateResult = JSON.parse(jsonMatch[0]);
+
+    // Store in session
+    const state = req.session.pipelineState;
+    state.prd.qualityGate = qualityGateResult;
+
+    res.json(qualityGateResult);
+  } catch (error) {
+    console.error('Quality gate error:', error);
+    res.status(500).json({ error: 'Quality gate failed' });
   }
 });
 

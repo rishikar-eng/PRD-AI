@@ -4,9 +4,11 @@ import StageIndicator from './components/StageIndicator';
 import Dashboard from './components/Dashboard';
 import EntryMode from './components/EntryMode';
 import IntakeChat from './components/IntakeChat';
-import AgentPipeline from './components/AgentPipeline';
+import SuccessMetric from './components/SuccessMetric';
+import AgentPipelineV2 from './components/AgentPipelineV2';
 import ReviewStage from './components/ReviewStage';
 import ShareView from './components/ShareView';
+import ExternalPRDReview from './components/ExternalPRDReview';
 import { API_URL } from './config';
 import './styles/globals.css';
 import './styles/components.css';
@@ -24,6 +26,8 @@ export default function App() {
   const [finalPRD, setFinalPRD] = useState(null);
   const [pendingShareToken, setPendingShareToken] = useState(null);
   const [shareData, setShareData] = useState(null);
+  const [externalPRD, setExternalPRD] = useState(null);
+  const [externalPipelineData, setExternalPipelineData] = useState(null);
 
   // Check authentication status on mount; detect share URLs
   useEffect(() => {
@@ -126,7 +130,6 @@ export default function App() {
       }
 
       const data = await response.json();
-      console.log('Restored data:', data);
 
       // Restore app state from project session data
       const state = data.sessionData;
@@ -154,6 +157,16 @@ export default function App() {
           comments: state.prd.allComments || [],
         });
       }
+
+      // Restore external PRD data if available
+      if (state.externalPRD?.uploaded) {
+        setExternalPRD(state.externalPRD.externalPRD);
+        setExternalPipelineData({
+          prd: state.externalPRD.externalPRD,
+          agentFeedback: state.externalPRD.agentFeedback,
+          claudeContext: state.externalPRD.claudeContext,
+        });
+      }
     } catch (error) {
       console.error('Resume project error:', error);
       alert('Failed to resume project: ' + error.message);
@@ -168,7 +181,12 @@ export default function App() {
   const handleIntakeComplete = ({ structuredData, messages }) => {
     setStructuredData(structuredData);
     setIntakeMessages(messages);
-    setCurrentStage(2); // Move to Agent Pipeline (Writer, QC, Debate)
+    setCurrentStage(1.5); // Move to Success Metric stage
+  };
+
+  const handleMetricComplete = (updatedStructuredData) => {
+    setStructuredData(updatedStructuredData);
+    setCurrentStage(2); // Move to Agent Pipeline V2
   };
 
   const handlePipelineComplete = (data) => {
@@ -287,8 +305,12 @@ export default function App() {
         <IntakeChat entryData={entryData} onComplete={handleIntakeComplete} />
       )}
 
+      {currentStage === 1.5 && structuredData && (
+        <SuccessMetric structuredData={structuredData} onComplete={handleMetricComplete} />
+      )}
+
       {currentStage === 2 && structuredData && (
-        <AgentPipeline structuredData={structuredData} onComplete={handlePipelineComplete} />
+        <AgentPipelineV2 structuredData={structuredData} onComplete={handlePipelineComplete} />
       )}
 
       {currentStage === 5 && pipelineData && (
@@ -360,6 +382,68 @@ export default function App() {
             </button>
           </div>
 
+          <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '12px', textAlign: 'center' }}>
+              Prepare Stage 2 Handoff
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px', textAlign: 'center', maxWidth: '600px', margin: '0 auto 24px' }}>
+              Generate a zip bundle for UI/UX design work. Contains your PRD, Rian theme reference, and a feature-aware Claude prompt. Take this to Claude web to create HTML mockups.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                className="btn-primary"
+                onClick={async () => {
+                  try {
+                    const featureName = structuredData?.featureName || 'Feature';
+                    const response = await fetch(`${API_URL}/api/handoff/stage2`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({
+                        prdText: finalPRD.prd,
+                        featureName: featureName
+                      })
+                    });
+
+                    if (!response.ok) {
+                      throw new Error('Failed to generate Stage 2 handoff bundle');
+                    }
+
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `stage2_handoff_${featureName.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.zip`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (error) {
+                    alert('Failed to generate Stage 2 handoff bundle. Please try again.');
+                    console.error('Stage 2 handoff error:', error);
+                  }
+                }}
+              >
+                Download Stage 2 Bundle
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '12px', textAlign: 'center' }}>
+              Review External PRD
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px', textAlign: 'center', maxWidth: '600px', margin: '0 auto 24px' }}>
+              Upload a PRD that you've refined with Claude (or another tool) to get specialist agent feedback and generate implementation context.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                className="btn-primary"
+                onClick={() => setCurrentStage(6.5)}
+              >
+                Upload External PRD
+              </button>
+            </div>
+          </div>
+
           <div className="card" style={{ maxWidth: '700px', margin: '0 auto', textAlign: 'left' }}>
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px' }}>
               Comment Summary
@@ -379,6 +463,17 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {currentStage === 6.5 && finalPRD && (
+        <ExternalPRDReview
+          originalPRD={finalPRD.prd}
+          onComplete={(data) => {
+            setExternalPipelineData(data);
+            setCurrentStage(6);
+          }}
+          onBack={() => setCurrentStage(6)}
+        />
       )}
 
       <footer className="footer">
