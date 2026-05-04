@@ -113,13 +113,34 @@ export default function App() {
     }
   };
 
-  const handleNewProject = () => {
+  const handleNewProject = async () => {
     // Reset all state and start new pipeline
     setCurrentStage(0);
     setEntryData(null);
     setStructuredData(null);
     setPipelineData(null);
     setFinalPRD(null);
+
+    // Create project immediately so projectId is available for input requests
+    try {
+      const response = await fetch(`${API_URL}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: 'Untitled PRD',
+          stage: 0,
+          session_data: { stage: 0 },
+        }),
+      });
+
+      if (response.ok) {
+        const project = await response.json();
+        console.log('Project created:', project.id);
+      }
+    } catch (error) {
+      console.error('Failed to create project:', error);
+    }
   };
 
   const handleResumeProject = async (projectId) => {

@@ -142,6 +142,9 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
         return;
       }
       setShareUrl(data.shareUrl);
+
+      // Refresh project ID after sharing (in case it was just created)
+      await fetchCurrentProjectId();
     } catch (error) {
       alert('Failed to generate share link');
     } finally {
@@ -240,15 +243,29 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
               </button>
             </div>
           )}
-          {currentProjectId && (
-            <button
-              className="btn-secondary"
-              onClick={() => setShowInputRequest(true)}
-              style={{ fontSize: '13px' }}
-            >
-              💬 Request Input
-            </button>
-          )}
+          <button
+            className="btn-secondary"
+            onClick={async () => {
+              if (!currentProjectId) {
+                // Auto-trigger share to create project if it doesn't exist
+                await handleShare();
+                // After sharing, fetchCurrentProjectId is called automatically
+                // Wait a moment for it to complete
+                setTimeout(() => {
+                  if (currentProjectId) {
+                    setShowInputRequest(true);
+                  } else {
+                    alert('Failed to save PRD. Please try clicking "Share PRD" first.');
+                  }
+                }, 500);
+                return;
+              }
+              setShowInputRequest(true);
+            }}
+            style={{ fontSize: '13px' }}
+          >
+            💬 Request Input
+          </button>
         </div>
 
         {/* Score Summary */}

@@ -63,6 +63,12 @@ router.post('/', requireAuth, async (req, res) => {
 
     if (error) throw error;
 
+    // Store project ID in session so it's available for share and input requests
+    if (!req.session.pipelineState) {
+      req.session.pipelineState = {};
+    }
+    req.session.pipelineState.projectId = data.id;
+
     res.json(data);
   } catch (error) {
     console.error('Create project error:', error);
@@ -241,10 +247,32 @@ router.get('/current', requireAuth, async (req, res) => {
  */
 router.post('/current/share', requireAuth, async (req, res) => {
   try {
-    const projectId = req.session.pipelineState?.projectId;
+    let projectId = req.session.pipelineState?.projectId;
 
+    // If no projectId in session, try to find or create project from current pipeline state
     if (!projectId) {
-      return res.status(400).json({ error: 'No active project. Complete the pipeline first.' });
+      // Try to create project from current session state
+      const pipelineState = req.session.pipelineState;
+      if (!pipelineState?.prd?.v0) {
+        return res.status(400).json({ error: 'No active project. Complete the pipeline first.' });
+      }
+
+      const featureName = pipelineState.intake?.structuredData?.featureName || 'Untitled Feature';
+      const { data: newProject, error: createError } = await supabase
+        .from('projects')
+        .insert({
+          user_email: req.session.userEmail,
+          title: featureName,
+          stage: pipelineState.stage || 6,
+          session_data: pipelineState,
+        })
+        .select('id')
+        .single();
+
+      if (createError) throw createError;
+
+      projectId = newProject.id;
+      req.session.pipelineState.projectId = projectId;
     }
 
     const userEmail = req.session.userEmail;

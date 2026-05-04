@@ -71,11 +71,9 @@ export default function CommentPanel({ comments, onCommentAction, intakeData, ac
           <button style={tabStyle(activeTab === 'comments')} onClick={() => onTabChange('comments')}>
             Comments ({comments.length})
           </button>
-          {prdId && (
-            <button style={tabStyle(activeTab === 'inputs')} onClick={() => onTabChange('inputs')}>
-              Input Requests
-            </button>
-          )}
+          <button style={tabStyle(activeTab === 'inputs')} onClick={() => onTabChange('inputs')}>
+            Input Requests
+          </button>
           {hasIntake && (
             <button style={tabStyle(activeTab === 'intake')} onClick={() => onTabChange('intake')}>
               Intake Chat
