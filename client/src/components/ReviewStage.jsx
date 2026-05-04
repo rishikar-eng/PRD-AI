@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import PRDDocument from './PRDDocument';
 import CommentPanel from './CommentPanel';
 import { API_URL } from '../config';
@@ -28,6 +28,24 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState(null);
+
+  // Fetch current project ID on mount
+  useEffect(() => {
+    fetchCurrentProjectId();
+  }, []);
+
+  const fetchCurrentProjectId = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/projects/current`, {
+        credentials: 'include',
+      });
+      const data = await response.json();
+      setCurrentProjectId(data.projectId);
+    } catch (error) {
+      console.error('Failed to get current project ID:', error);
+    }
+  };
 
   const handleSendIntakeMessage = async (text) => {
     setLocalMessages(prev => [...prev, { role: 'user', content: text }]);
@@ -294,6 +312,7 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
             onHighlightSection={handleHighlightSection}
             localMessages={localMessages}
             isSendingMessage={isSendingMessage}
+            prdId={currentProjectId}
             hasNewMessages={hasNewMessages}
             isRegenerating={isRegenerating}
             onSendMessage={handleSendIntakeMessage}

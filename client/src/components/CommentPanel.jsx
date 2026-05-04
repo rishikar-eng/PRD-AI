@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import CommentCard from './CommentCard';
+import InputRequestsView from './InputRequestsView';
 
 const tabStyle = (active) => ({
   padding: '8px 16px',
@@ -40,7 +41,7 @@ function findMatchingSection(fieldKey, prdSections) {
   return bestScore > 0 ? best : null;
 }
 
-export default function CommentPanel({ comments, onCommentAction, intakeData, activeTab, onTabChange, prdSections = [], highlightedSections = [], onHighlightSection, localMessages, isSendingMessage, hasNewMessages, isRegenerating, onSendMessage, onRegeneratePRD }) {
+export default function CommentPanel({ comments, onCommentAction, intakeData, activeTab, onTabChange, prdSections = [], highlightedSections = [], onHighlightSection, localMessages, isSendingMessage, hasNewMessages, isRegenerating, onSendMessage, onRegeneratePRD, prdId }) {
   const [inputText, setInputText] = useState('');
 
   const qcComments = comments.filter(c => c.agent === 'QC');
@@ -64,12 +65,17 @@ export default function CommentPanel({ comments, onCommentAction, intakeData, ac
       {/* Header + Tabs */}
       <div style={{ padding: '20px 24px 0', borderBottom: '1px solid var(--border)' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '12px' }}>
-          {activeTab === 'intake' ? 'Intake Context' : 'Agent Comments'}
+          {activeTab === 'intake' ? 'Intake Context' : activeTab === 'inputs' ? 'Input Requests' : 'Agent Comments'}
         </h2>
         <div style={{ display: 'flex', gap: '4px' }}>
           <button style={tabStyle(activeTab === 'comments')} onClick={() => onTabChange('comments')}>
             Comments ({comments.length})
           </button>
+          {prdId && (
+            <button style={tabStyle(activeTab === 'inputs')} onClick={() => onTabChange('inputs')}>
+              Input Requests
+            </button>
+          )}
           {hasIntake && (
             <button style={tabStyle(activeTab === 'intake')} onClick={() => onTabChange('intake')}>
               Intake Chat
@@ -117,6 +123,11 @@ export default function CommentPanel({ comments, onCommentAction, intakeData, ac
               </div>
             )}
           </>
+        )}
+
+        {/* ── Input Requests Tab ── */}
+        {activeTab === 'inputs' && (
+          <InputRequestsView prdId={prdId} />
         )}
 
         {/* ── Intake Tab ── */}
