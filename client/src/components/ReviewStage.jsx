@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import PRDDocument from './PRDDocument';
 import CommentPanel from './CommentPanel';
+import InputRequestModal from './InputRequestModal';
 import { API_URL } from '../config';
 
 export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
@@ -29,6 +30,7 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState(null);
+  const [showInputRequest, setShowInputRequest] = useState(false);
 
   // Fetch current project ID on mount
   useEffect(() => {
@@ -205,8 +207,8 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
           Review and action all agent comments to finalize the PRD
         </p>
 
-        {/* Share */}
-        <div style={{ marginBottom: '16px' }}>
+        {/* Actions: Share and Request Input */}
+        <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
           {!shareUrl ? (
             <button
               className="btn-secondary"
@@ -237,6 +239,15 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
                 {shareCopied ? 'Copied!' : 'Copy Link'}
               </button>
             </div>
+          )}
+          {currentProjectId && (
+            <button
+              className="btn-secondary"
+              onClick={() => setShowInputRequest(true)}
+              style={{ fontSize: '13px' }}
+            >
+              💬 Request Input
+            </button>
           )}
         </div>
 
@@ -341,6 +352,20 @@ export default function ReviewStage({ pipelineData, intakeData, onFinalize }) {
             Finalize PRD →
           </button>
         </div>
+      )}
+
+      {/* Input Request Modal */}
+      {showInputRequest && currentProjectId && (
+        <InputRequestModal
+          prdId={currentProjectId}
+          stage="owner_review"
+          stageDraft={prdText}
+          onClose={() => setShowInputRequest(false)}
+          onSuccess={(inputRequest) => {
+            setShowInputRequest(false);
+            alert(`Input request sent to ${inputRequest.requested_from}. They will be notified via Teams.`);
+          }}
+        />
       )}
     </div>
   );
