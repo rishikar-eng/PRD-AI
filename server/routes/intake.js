@@ -64,7 +64,8 @@ Start by acknowledging what you understand from their input, then ask ONE critic
     if (suggestionsMatch) {
       try {
         suggestions = JSON.parse(`[${suggestionsMatch[1]}]`);
-        question = response.replace(/\nSUGGESTIONS:\[.*?\]/, '').trim();
+        // Remove SUGGESTIONS line with or without newline before it
+        question = response.replace(/\s*SUGGESTIONS:\[.*?\]\s*/, '').trim();
       } catch (e) {
         console.error('Failed to parse suggestions:', e);
       }
@@ -141,7 +142,8 @@ router.post('/reply', requireAuth, async (req, res) => {
     if (suggestionsMatch) {
       try {
         suggestions = JSON.parse(`[${suggestionsMatch[1]}]`);
-        question = response.replace(/\nSUGGESTIONS:\[.*?\]/, '').trim();
+        // Remove SUGGESTIONS line with or without newline before it
+        question = response.replace(/\s*SUGGESTIONS:\[.*?\]\s*/, '').trim();
       } catch (e) {
         console.error('Failed to parse suggestions:', e);
       }
