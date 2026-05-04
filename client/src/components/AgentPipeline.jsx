@@ -1,6 +1,7 @@
 
 import { API_URL } from '../config';
 import React, { useState, useEffect, useRef } from 'react';
+import InputRequestModal from './InputRequestModal';
 
 export default function AgentPipeline({ structuredData, onComplete }) {
   const [currentAgent, setCurrentAgent] = useState('writer'); // writer | qc | debate
@@ -11,13 +12,28 @@ export default function AgentPipeline({ structuredData, onComplete }) {
   const [isQCLoading, setIsQCLoading] = useState(false);
   const [isDebateLoading, setIsDebateLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showInputRequest, setShowInputRequest] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState(null);
   const prdAccumulator = useRef(''); // Bug fix: use ref to avoid race condition
 
   useEffect(() => {
     if (currentAgent === 'writer') {
       runWriterAgent();
     }
+    fetchCurrentProjectId();
   }, []);
+
+  const fetchCurrentProjectId = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/projects/current`, {
+        credentials: 'include',
+      });
+      const data = await response.json();
+      setCurrentProjectId(data.projectId);
+    } catch (error) {
+      console.error('Failed to get current project ID:', error);
+    }
+  };
 
   const runWriterAgent = async () => {
     setIsStreaming(true);
@@ -165,6 +181,12 @@ export default function AgentPipeline({ structuredData, onComplete }) {
     return 'Blocked';
   };
 
+  const handleInputRequestSuccess = (inputRequest) => {
+    setShowInputRequest(false);
+    // Show success message
+    alert(`Input request sent to ${inputRequest.requested_from}. They will be notified via Teams.`);
+  };
+
   return (
     <div className="section fade-in" style={{ maxWidth: '1000px' }}>
       <div style={{ marginBottom: '32px' }}>
@@ -220,13 +242,24 @@ export default function AgentPipeline({ structuredData, onComplete }) {
             <h2 style={{ fontSize: '18px', fontWeight: 700 }}>
               Generated PRD
             </h2>
-            {isStreaming && (
-              <div className="typing-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              {!isStreaming && currentProjectId && (
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowInputRequest(true)}
+                  style={{ fontSize: '13px', padding: '8px 16px' }}
+                >
+                  Request Input
+                </button>
+              )}
+              {isStreaming && (
+                <div className="typing-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              )}
+            </div>
           </div>
           <div style={{
             background: 'var(--bg-surface)',
@@ -311,6 +344,17 @@ export default function AgentPipeline({ structuredData, onComplete }) {
             {' '}{debateResult.comments.filter(c => c.type === 'constructive').length} constructive)
           </div>
         </div>
+      )}
+
+      {/* Input Request Modal */}
+      {showInputRequest && currentProjectId && (
+        <InputRequestModal
+          prdId={currentProjectId}
+          stage="writer"
+          stageDraft={prdText}
+          onClose={() => setShowInputRequest(false)}
+          onSuccess={handleInputRequestSuccess}
+        />
       )}
     </div>
   );

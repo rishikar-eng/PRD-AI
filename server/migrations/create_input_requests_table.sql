@@ -48,7 +48,7 @@ INSERT INTO team_expertise (user_email, user_name, role, domain, suggested_stage
   ('vishal.kaushal@rian.io', 'Vishal Kaushal', 'R&D (TTS+)', 'TTS pipeline, voice cloning, audio models, ElevenLabs', ARRAY['technical_feasibility']),
   ('rugved@rian.io', 'Rugved Myakal', 'R&D (OCR)', 'OCR pipeline, Azure DI, image translation, DTP', ARRAY['technical_feasibility']),
   ('saijash@rian.io', 'Saijash', 'CTO', 'Final technical authority, architecture decisions, AI strategy', ARRAY['technical_feasibility', 'security', 'debate']),
-  ('ojas@rian.io', 'Ojas', 'Product', 'PRD owner, primary builder', ARRAY[])
+  ('ojas@rian.io', 'Ojas', 'Product', 'PRD owner, primary builder', ARRAY[]::VARCHAR[])
 ON CONFLICT (user_email) DO NOTHING;
 
 -- Grant permissions

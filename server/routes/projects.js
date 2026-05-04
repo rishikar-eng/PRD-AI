@@ -219,10 +219,23 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
 });
 
 /**
+ * SPEC: GET /api/projects/current
+ * Purpose: Get the currently active project ID from session
+ * Inputs: None - reads projectId from session
+ * Outputs: { projectId } or null if no active project
+ * Side effects: None - read-only
+ * Error states: None - returns null if no project
+ */
+router.get('/current', requireAuth, async (req, res) => {
+  const projectId = req.session.pipelineState?.projectId || null;
+  res.json({ projectId });
+});
+
+/**
  * SPEC: POST /api/projects/current/share
  * Purpose: Generate a share token for the currently active project
  * Inputs: None - reads projectId from session
- * Outputs: { shareUrl } with the full shareable link
+ * Outputs: { shareUrl} with the full shareable link
  * Side effects: Stores shareToken inside session_data JSONB field (no schema change needed)
  * Error states: 400 if no active project in session, 404 if project not found, 500 on DB error
  */
