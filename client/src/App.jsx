@@ -9,6 +9,7 @@ import AgentPipelineV2 from './components/AgentPipelineV2';
 import ReviewStage from './components/ReviewStage';
 import ShareView from './components/ShareView';
 import ExternalPRDReview from './components/ExternalPRDReview';
+import RespondToInputRequest from './components/RespondToInputRequest';
 import { API_URL } from './config';
 import './styles/globals.css';
 import './styles/components.css';
@@ -28,13 +29,17 @@ export default function App() {
   const [shareData, setShareData] = useState(null);
   const [externalPRD, setExternalPRD] = useState(null);
   const [externalPipelineData, setExternalPipelineData] = useState(null);
+  const [inputRequestId, setInputRequestId] = useState(null);
 
-  // Check authentication status on mount; detect share URLs
+  // Check authentication status on mount; detect share URLs and input request URLs
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith('/share/')) {
       const token = path.split('/share/')[1];
       if (token) setPendingShareToken(token);
+    } else if (path.startsWith('/respond/')) {
+      const requestId = path.split('/respond/')[1];
+      if (requestId) setInputRequestId(requestId);
     }
     checkAuth();
   }, []);
@@ -202,6 +207,11 @@ export default function App() {
   // Share view - authenticated users viewing a shared PRD
   if (isAuthenticated && shareData) {
     return <ShareView data={shareData} onClose={handleCloseShare} />;
+  }
+
+  // Input request response page - NO authentication required (public link)
+  if (inputRequestId) {
+    return <RespondToInputRequest requestId={inputRequestId} />;
   }
 
   // Loading state
