@@ -1,15 +1,15 @@
 import express from 'express';
 import cors from 'cors';
-import session from 'express-session';
 import dotenv from 'dotenv';
 import { attachSession } from './middleware/auth.js';
+import { getSessionMiddleware } from './services/sessionStore.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Trust proxy - needed when behind CloudFront/ALB
+// Trust proxy - needed when behind Vercel/CloudFront
 app.set('trust proxy', 1);
 
 // Middleware
@@ -20,17 +20,8 @@ app.use(cors({
 
 app.use(express.json());
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
-  resave: false,
-  saveUninitialized: true,
-  cookie: {
-    secure: false, // CloudFront uses HTTP to backend, so we can't use secure cookies
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24, // 24 hours
-  },
-}));
+// Use database-backed sessions (Supabase PostgreSQL)
+app.use(getSessionMiddleware());
 
 app.use(attachSession);
 
