@@ -12,45 +12,17 @@ if (!projectRef || !process.env.SUPABASE_DB_PASSWORD) {
   console.warn('Supabase DB credentials not configured. Using in-memory sessions (not recommended for production)');
 }
 
-let pgPool = null;
-let sessionStore = null;
+// IMPORTANT: PostgreSQL session storage is DISABLED for now
+// Reason: Render cannot connect to Supabase PostgreSQL via IPv6
+// Workaround: Using in-memory sessions (works for single-server deployment)
+// Future fix: Need to configure Supabase connection pooler with correct region
+// or use a different session storage mechanism (Redis, etc.)
 
-if (projectRef && process.env.SUPABASE_DB_PASSWORD) {
-  try {
-    pgPool = new Pool({
-      host: `db.${projectRef}.supabase.co`,
-      port: 5432,
-      database: 'postgres',
-      user: 'postgres',
-      password: process.env.SUPABASE_DB_PASSWORD,
-      ssl: { rejectUnauthorized: false },
-      // Add connection timeout and retry settings
-      connectionTimeoutMillis: 5000,
-      // Don't fail on connection error, just log it
-    });
+console.warn('⚠️  PostgreSQL session storage is disabled');
+console.warn('    Using in-memory sessions (not persistent across server restarts)');
+console.warn('    To enable: Fix PostgreSQL connection in sessionStore.js');
 
-    // Test the connection
-    pgPool.on('error', (err) => {
-      console.error('PostgreSQL pool error:', err.message);
-      console.warn('Falling back to in-memory sessions due to database connection error');
-    });
-
-    // Initialize session store
-    const PgSession = connectPgSimple(session);
-    sessionStore = new PgSession({
-      pool: pgPool,
-      tableName: 'session',
-      createTableIfMissing: true
-    });
-
-    console.log('✓ PostgreSQL session store initialized');
-  } catch (error) {
-    console.error('Failed to initialize PostgreSQL session store:', error.message);
-    console.warn('Falling back to in-memory sessions');
-    pgPool = null;
-    sessionStore = null;
-  }
-}
+const sessionStore = null;
 
 export { sessionStore };
 
