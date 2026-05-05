@@ -137,6 +137,8 @@ export default function App() {
       if (response.ok) {
         const project = await response.json();
         console.log('Project created:', project.id);
+        // Update URL with project ID for easy tracking
+        window.history.pushState({}, '', `/prd/${project.id}`);
       }
     } catch (error) {
       console.error('Failed to create project:', error);
