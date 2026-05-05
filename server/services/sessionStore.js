@@ -12,23 +12,47 @@ if (!projectRef || !process.env.SUPABASE_DB_PASSWORD) {
   console.warn('Supabase DB credentials not configured. Using in-memory sessions (not recommended for production)');
 }
 
-const pgPool = projectRef && process.env.SUPABASE_DB_PASSWORD ? new Pool({
-  host: `db.${projectRef}.supabase.co`,
-  port: 5432,
-  database: 'postgres',
-  user: 'postgres',
-  password: process.env.SUPABASE_DB_PASSWORD,
-  ssl: { rejectUnauthorized: false }
-}) : null;
+let pgPool = null;
+let sessionStore = null;
 
-// Initialize session store
-const PgSession = connectPgSimple(session);
+if (projectRef && process.env.SUPABASE_DB_PASSWORD) {
+  try {
+    pgPool = new Pool({
+      host: `db.${projectRef}.supabase.co`,
+      port: 5432,
+      database: 'postgres',
+      user: 'postgres',
+      password: process.env.SUPABASE_DB_PASSWORD,
+      ssl: { rejectUnauthorized: false },
+      // Add connection timeout and retry settings
+      connectionTimeoutMillis: 5000,
+      // Don't fail on connection error, just log it
+    });
 
-export const sessionStore = pgPool ? new PgSession({
-  pool: pgPool,
-  tableName: 'session',
-  createTableIfMissing: true
-}) : null;
+    // Test the connection
+    pgPool.on('error', (err) => {
+      console.error('PostgreSQL pool error:', err.message);
+      console.warn('Falling back to in-memory sessions due to database connection error');
+    });
+
+    // Initialize session store
+    const PgSession = connectPgSimple(session);
+    sessionStore = new PgSession({
+      pool: pgPool,
+      tableName: 'session',
+      createTableIfMissing: true
+    });
+
+    console.log('✓ PostgreSQL session store initialized');
+  } catch (error) {
+    console.error('Failed to initialize PostgreSQL session store:', error.message);
+    console.warn('Falling back to in-memory sessions');
+    pgPool = null;
+    sessionStore = null;
+  }
+}
+
+export { sessionStore };
 
 export function getSessionMiddleware() {
   const sessionConfig = {
