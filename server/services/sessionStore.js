@@ -13,14 +13,12 @@ if (!projectRef || !process.env.SUPABASE_DB_PASSWORD) {
 }
 
 const pgPool = projectRef && process.env.SUPABASE_DB_PASSWORD ? new Pool({
-  host: `aws-0-ap-south-1.pooler.supabase.com`,
-  port: 6543,
+  host: `db.${projectRef}.supabase.co`,
+  port: 5432,
   database: 'postgres',
-  user: `postgres.${projectRef}`,
+  user: 'postgres',
   password: process.env.SUPABASE_DB_PASSWORD,
-  ssl: { rejectUnauthorized: false },
-  // Force IPv4 to avoid IPv6 connectivity issues
-  family: 4
+  ssl: { rejectUnauthorized: false }
 }) : null;
 
 // Initialize session store
