@@ -1,3 +1,13 @@
+---
+title: Rian PRD Pipeline
+colorFrom: pink
+colorTo: orange
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: AI-powered PRD generation for Rian
+---
+
 # Rian PRD Pipeline V1..
 
 AI-powered 6-stage PRD generation system for Rian.io
