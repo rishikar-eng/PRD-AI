@@ -10,6 +10,8 @@ import ReviewStage from './components/ReviewStage';
 import ShareView from './components/ShareView';
 import ExternalPRDReview from './components/ExternalPRDReview';
 import RespondToInputRequest from './components/RespondToInputRequest';
+import TeamDirectory from './components/TeamDirectory';
+import ProjectViewer from './components/ProjectViewer';
 import { API_URL } from './config';
 import './styles/globals.css';
 import './styles/components.css';
@@ -30,6 +32,8 @@ export default function App() {
   const [externalPRD, setExternalPRD] = useState(null);
   const [externalPipelineData, setExternalPipelineData] = useState(null);
   const [inputRequestId, setInputRequestId] = useState(null);
+  const [showTeamDirectory, setShowTeamDirectory] = useState(false);
+  const [viewingProjectId, setViewingProjectId] = useState(null);
 
   // Check authentication status on mount; detect share URLs and input request URLs
   useEffect(() => {
@@ -227,6 +231,30 @@ export default function App() {
     setCurrentStage(6); // Move to Final Screen
   };
 
+  // Back-to-Dashboard handler shown in the NavBar from every authenticated page.
+  // Auto-save covers nearly every state, so abandoning is generally safe — we still warn
+  // for the few transitions where work isn't fully persisted (mid-streaming, post-review actions).
+  const handleGoHome = () => {
+    const hasUnsavedWork = currentStage !== null && !showTeamDirectory;
+    if (hasUnsavedWork) {
+      const ok = window.confirm(
+        'Back to dashboard? Your current progress is auto-saved — you can resume from the PRD list at any time.'
+      );
+      if (!ok) return;
+    }
+    setShowTeamDirectory(false);
+    setViewingProjectId(null);
+    setCurrentStage(null);
+    setEntryData(null);
+    setStructuredData(null);
+    setIntakeMessages([]);
+    setPipelineData(null);
+    setFinalPRD(null);
+    setExternalPRD(null);
+    setExternalPipelineData(null);
+    window.history.pushState({}, '', '/');
+  };
+
   // Share view - authenticated users viewing a shared PRD
   if (isAuthenticated && shareData) {
     return <ShareView data={shareData} onClose={handleCloseShare} />;
@@ -323,11 +351,26 @@ export default function App() {
   // Main app - authenticated
   return (
     <>
-      <NavBar />
-      {currentStage !== null && <StageIndicator currentStage={currentStage} />}
+      <NavBar showHome={currentStage !== null || showTeamDirectory || !!viewingProjectId} onHome={handleGoHome} />
+      {currentStage !== null && !showTeamDirectory && <StageIndicator currentStage={currentStage} />}
 
-      {currentStage === null && (
-        <Dashboard onNewProject={handleNewProject} onResumeProject={handleResumeProject} />
+      {showTeamDirectory && !viewingProjectId && (
+        <TeamDirectory onViewProject={setViewingProjectId} />
+      )}
+
+      {viewingProjectId && (
+        <ProjectViewer
+          projectId={viewingProjectId}
+          onClose={() => setViewingProjectId(null)}
+        />
+      )}
+
+      {!showTeamDirectory && currentStage === null && (
+        <Dashboard
+          onNewProject={handleNewProject}
+          onResumeProject={handleResumeProject}
+          onOpenTeam={() => setShowTeamDirectory(true)}
+        />
       )}
 
       {currentStage === 0 && (
@@ -377,14 +420,45 @@ export default function App() {
             Your production-ready PRD has been finalized with all agent feedback incorporated.
           </p>
 
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
             <button
               className="btn-primary"
+              onClick={async () => {
+                try {
+                  const featureName = structuredData?.featureName || 'Untitled Feature';
+                  const response = await fetch(`${API_URL}/api/handoff/docx`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                      prdText: finalPRD.prd,
+                      featureName,
+                      role: structuredData?.role,
+                    }),
+                  });
+                  if (!response.ok) throw new Error('Failed to generate docx');
+                  const blob = await response.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${featureName.replace(/[^a-zA-Z0-9]/g, '_')}_PRD_${Date.now()}.docx`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (error) {
+                  alert('Failed to generate .docx. Please try again.');
+                  console.error('Docx download error:', error);
+                }
+              }}
+            >
+              Download .docx
+            </button>
+            <button
+              className="btn-secondary"
               onClick={() => {
                 navigator.clipboard.writeText(finalPRD.prd);
               }}
             >
-              Copy PRD
+              Copy as Markdown
             </button>
             <button
               className="btn-secondary"
@@ -393,12 +467,12 @@ export default function App() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `PRD_${Date.now()}.md`; // Bug fix: changed from .txt to .md
+                a.download = `PRD_${Date.now()}.md`;
                 a.click();
                 URL.revokeObjectURL(url);
               }}
             >
-              Download
+              Download .md
             </button>
             <button
               className="btn-secondary"
@@ -414,6 +488,9 @@ export default function App() {
               Back to Dashboard
             </button>
           </div>
+          <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginBottom: '32px' }}>
+            The .docx opens directly in Google Docs (upload to Drive) or Word — your team can comment, suggest edits, and collaborate.
+          </p>
 
           <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '12px', textAlign: 'center' }}>

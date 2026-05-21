@@ -1,19 +1,59 @@
 /**
  * Microsoft Teams Integration Service
- * Purpose: Send input request notifications to team members via Teams webhooks
+ *
+ * Sends notifications to a Teams channel via a Power Automate "Workflows" webhook.
+ *
+ * Setup (one-time per channel, by a Microsoft 365 admin):
+ *   1. In Teams, open the target channel.
+ *   2. Power Automate → Create from template:
+ *      "Post to a channel when a webhook request is received".
+ *   3. Save the flow and copy the generated HTTP POST URL.
+ *   4. Set TEAMS_WEBHOOK_URL to that URL in the backend environment.
+ *
+ * Payload format: Adaptive Card v1.5 wrapped in the Power Automate message
+ * envelope. The legacy Office 365 connector (MessageCard) format is retired
+ * and is no longer accepted by new webhooks.
  */
 
+const ADAPTIVE_CARD_VERSION = '1.5';
+const DRAFT_PREVIEW_MAX_LENGTH = 500;
+
+function adaptiveCardEnvelope({ body, actions }) {
+  return {
+    type: 'message',
+    attachments: [
+      {
+        contentType: 'application/vnd.microsoft.card.adaptive',
+        contentUrl: null,
+        content: {
+          $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+          type: 'AdaptiveCard',
+          version: ADAPTIVE_CARD_VERSION,
+          body,
+          actions,
+        },
+      },
+    ],
+  };
+}
+
+async function postToWebhook(payload) {
+  const response = await fetch(process.env.TEAMS_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    console.error('Teams webhook error:', response.status, errorText);
+    return false;
+  }
+  return true;
+}
+
 /**
- * Sends an input request notification to Microsoft Teams
- * @param {Object} params
- * @param {string} params.requestedFromName - Name of person being asked
- * @param {string} params.requestedByName - Name of person requesting
- * @param {string} params.prdTitle - PRD title
- * @param {string} params.stage - Stage name (human-readable)
- * @param {string} params.question - The question being asked
- * @param {string} params.stageDraft - Current AI draft (optional)
- * @param {string} params.responseUrl - URL to respond to the request
- * @returns {Promise<boolean>} Success status
+ * Send an input-request notification to a Teams channel.
  */
 export async function sendInputRequestToTeams({
   requestedFromName,
@@ -22,76 +62,88 @@ export async function sendInputRequestToTeams({
   stage,
   question,
   stageDraft,
-  responseUrl
+  responseUrl,
 }) {
   if (!process.env.TEAMS_WEBHOOK_URL) {
     console.warn('TEAMS_WEBHOOK_URL not configured. Skipping Teams notification.');
     return false;
   }
 
-  // Truncate draft if too long (Teams has message size limits)
-  const truncatedDraft = stageDraft
-    ? stageDraft.length > 500
-      ? stageDraft.substring(0, 500) + '...'
-      : stageDraft
-    : null;
+  const truncatedDraft = stageDraft && stageDraft.length > DRAFT_PREVIEW_MAX_LENGTH
+    ? stageDraft.substring(0, DRAFT_PREVIEW_MAX_LENGTH) + '…'
+    : stageDraft;
 
-  // Build Teams MessageCard (Legacy card format - works everywhere)
-  const message = {
-    "@type": "MessageCard",
-    "@context": "https://schema.org/extensions",
-    "summary": `Input Request from ${requestedByName}`,
-    "themeColor": "f472b6", // Rian pink
-    "title": `🔔 Input Request: ${stage}`,
-    "sections": [
+  const body = [
+    {
+      type: 'TextBlock',
+      text: `Input Request: ${stage}`,
+      size: 'Large',
+      weight: 'Bolder',
+      color: 'Accent',
+      wrap: true,
+    },
+    {
+      type: 'TextBlock',
+      text: `${requestedByName} needs your input`,
+      weight: 'Bolder',
+      wrap: true,
+      spacing: 'Small',
+    },
+    {
+      type: 'TextBlock',
+      text: `PRD: ${prdTitle}`,
+      isSubtle: true,
+      size: 'Small',
+      wrap: true,
+      spacing: 'None',
+    },
+    {
+      type: 'FactSet',
+      spacing: 'Medium',
+      facts: [
+        { title: 'Stage:', value: stage },
+        { title: 'Question:', value: question },
+      ],
+    },
+  ];
+
+  if (truncatedDraft) {
+    body.push(
       {
-        "activityTitle": `${requestedByName} needs your input`,
-        "activitySubtitle": `PRD: ${prdTitle}`,
-        "activityImage": "https://www.rian.io/favicon.ico", // Rian logo
-        "facts": [
-          {
-            "name": "Stage:",
-            "value": stage
-          },
-          {
-            "name": "Question:",
-            "value": question
-          }
-        ],
-        "text": truncatedDraft ? `**Current Draft:**\n\n${truncatedDraft}` : null
-      }
+        type: 'TextBlock',
+        text: 'Current Draft',
+        weight: 'Bolder',
+        spacing: 'Medium',
+        wrap: true,
+      },
+      {
+        type: 'TextBlock',
+        text: truncatedDraft,
+        isSubtle: true,
+        size: 'Small',
+        wrap: true,
+        spacing: 'Small',
+      },
+    );
+  }
+
+  const payload = adaptiveCardEnvelope({
+    body,
+    actions: [
+      {
+        type: 'Action.OpenUrl',
+        title: 'View PRD & Respond',
+        url: responseUrl,
+      },
     ],
-    "potentialAction": [
-      {
-        "@type": "OpenUri",
-        "name": "📝 View PRD & Respond",
-        "targets": [
-          {
-            "os": "default",
-            "uri": responseUrl
-          }
-        ]
-      }
-    ]
-  };
+  });
 
   try {
-    const response = await fetch(process.env.TEAMS_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Teams webhook error:', response.status, errorText);
-      return false;
+    const ok = await postToWebhook(payload);
+    if (ok) {
+      console.log('Teams notification sent successfully to', requestedFromName);
     }
-
-    console.log('Teams notification sent successfully to', requestedFromName);
-    return true;
+    return ok;
   } catch (error) {
     console.error('Failed to send Teams notification:', error);
     return false;
@@ -99,68 +151,55 @@ export async function sendInputRequestToTeams({
 }
 
 /**
- * Sends a notification when input is incorporated into PRD
- * @param {Object} params
- * @param {string} params.requestedByName - Name of person who requested input
- * @param {string} params.requestedFromName - Name of person who provided input
- * @param {string} params.prdTitle - PRD title
- * @param {string} params.stage - Stage name
- * @param {string} params.prdUrl - URL to view the updated PRD
+ * Notify the responder that their input has been incorporated into the PRD.
  */
 export async function notifyInputIncorporated({
   requestedByName,
   requestedFromName,
   prdTitle,
   stage,
-  prdUrl
+  prdUrl,
 }) {
   if (!process.env.TEAMS_WEBHOOK_URL) {
     return false;
   }
 
-  const message = {
-    "@type": "MessageCard",
-    "@context": "https://schema.org/extensions",
-    "summary": `Your input was incorporated`,
-    "themeColor": "4ade80", // Green
-    "title": `✅ Input Incorporated`,
-    "sections": [
+  const payload = adaptiveCardEnvelope({
+    body: [
       {
-        "activityTitle": `${requestedByName} incorporated your input`,
-        "activitySubtitle": `PRD: ${prdTitle}`,
-        "facts": [
-          {
-            "name": "Stage:",
-            "value": stage
-          },
-          {
-            "name": "Status:",
-            "value": "AI regenerated with your input"
-          }
-        ]
-      }
+        type: 'TextBlock',
+        text: 'Input Incorporated',
+        size: 'Large',
+        weight: 'Bolder',
+        color: 'Good',
+        wrap: true,
+      },
+      {
+        type: 'TextBlock',
+        text: `${requestedByName} incorporated your input on "${prdTitle}"`,
+        wrap: true,
+        spacing: 'Small',
+      },
+      {
+        type: 'FactSet',
+        spacing: 'Medium',
+        facts: [
+          { title: 'Stage:', value: stage },
+          { title: 'Status:', value: 'PRD regenerated with your input' },
+        ],
+      },
     ],
-    "potentialAction": [
+    actions: [
       {
-        "@type": "OpenUri",
-        "name": "View Updated PRD",
-        "targets": [
-          {
-            "os": "default",
-            "uri": prdUrl
-          }
-        ]
-      }
-    ]
-  };
+        type: 'Action.OpenUrl',
+        title: 'View Updated PRD',
+        url: prdUrl,
+      },
+    ],
+  });
 
   try {
-    await fetch(process.env.TEAMS_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message),
-    });
-    return true;
+    return await postToWebhook(payload);
   } catch (error) {
     console.error('Failed to send Teams notification:', error);
     return false;

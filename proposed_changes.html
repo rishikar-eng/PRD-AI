@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PRD Pipeline — Proposed Infrastructure Changes</title>
+<style>
+  @page { size: A4; margin: 18mm 20mm; }
+  html, body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 11pt;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .doc-header {
+    border-bottom: 2px solid #ec4899;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+  .doc-header h1 {
+    font-size: 18pt;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+    color: #111;
+  }
+  .doc-header .meta {
+    font-size: 9.5pt;
+    color: #666;
+  }
+  .summary {
+    background: #f7f7f9;
+    border-left: 3px solid #ec4899;
+    padding: 10px 14px;
+    margin-bottom: 24px;
+    font-size: 10.5pt;
+  }
+  h2 {
+    font-size: 13pt;
+    font-weight: 700;
+    margin: 22px 0 8px 0;
+    color: #111;
+    border-bottom: 1px solid #e3e3e8;
+    padding-bottom: 4px;
+  }
+  h3 {
+    font-size: 10.5pt;
+    font-weight: 600;
+    margin: 14px 0 4px 0;
+    color: #333;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  p { margin: 4px 0 8px 0; }
+  ul { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin-bottom: 3px; }
+  .field {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 6px 14px;
+    margin-bottom: 4px;
+    font-size: 10.5pt;
+  }
+  .field .label {
+    font-weight: 600;
+    color: #555;
+  }
+  .pill {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 9pt;
+    font-weight: 600;
+  }
+  .pill-low { background: #e6f4ea; color: #1e7a3a; }
+  .pill-med { background: #fff4e0; color: #a85b00; }
+  .pill-high { background: #fde7e7; color: #a01c1c; }
+  .decisions {
+    margin-top: 26px;
+    padding: 14px 16px;
+    border: 1px solid #e3e3e8;
+    border-radius: 4px;
+    background: #fafafb;
+  }
+  .decisions h2 {
+    margin-top: 0;
+    border: none;
+    padding: 0;
+  }
+  .decision {
+    margin: 8px 0;
+    padding-left: 22px;
+    position: relative;
+  }
+  .decision::before {
+    content: "☐";
+    position: absolute;
+    left: 0;
+    top: -2px;
+    font-size: 14pt;
+    color: #888;
+  }
+  .footer {
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid #e3e3e8;
+    font-size: 9pt;
+    color: #999;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <h1>PRD Pipeline — Proposed Infrastructure Changes</h1>
+  <div class="meta">Internal proposal · 20 May 2026 · For sign-off before implementation</div>
+</div>
+
+<div class="summary">
+  Two non-feature changes are recommended before further development. Both address
+  silent-failure risks in the current production setup. Together: roughly one engineering day.
+</div>
+
+<h2>1. Replacing the Teams notification webhook</h2>
+
+<p style="margin-bottom: 10px;">
+  The current notification system uses Office 365 MessageCards, which Microsoft retired at the end of 2025.
+  Existing webhook URLs may stop working without notice when our tenant is cut over.
+  The five realistic replacement services are listed below.
+</p>
+
+<h3>Option A — Power Automate Workflows (Recommended)</h3>
+<div class="field">
+  <div class="label">Service</div>
+  <div>Microsoft Power Automate, "Post to channel when a webhook request is received" template.</div>
+</div>
+<div class="field">
+  <div class="label">What it is</div>
+  <div>Microsoft's official replacement for the retired connector. Still posts into Teams channels using the rich Adaptive Card format.</div>
+</div>
+<div class="field">
+  <div class="label">Cost</div>
+  <div>Free — uses the Power Automate standard tier already included with Microsoft 365 licences.</div>
+</div>
+<div class="field">
+  <div class="label">Setup</div>
+  <div>One-time flow per Teams channel by an M365 admin. Copy the generated URL into our environment variables.</div>
+</div>
+<div class="field">
+  <div class="label">When to pick</div>
+  <div>Default choice. Minimum change to current workflow, supported by Microsoft long-term.</div>
+</div>
+
+<h3>Option B — Microsoft Graph API</h3>
+<div class="field">
+  <div class="label">Service</div>
+  <div>Microsoft Graph (<em>graph.microsoft.com/v1.0/teams/{id}/channels/{id}/messages</em>).</div>
+</div>
+<div class="field">
+  <div class="label">What it is</div>
+  <div>Direct REST API call to post messages into Teams channels. Supports replies, @mentions, threading, edits.</div>
+</div>
+<div class="field">
+  <div class="label">Cost</div>
+  <div>Free — Graph API has no per-call fee under normal usage.</div>
+</div>
+<div class="field">
+  <div class="label">Setup</div>
+  <div>Register an Azure AD application; grant <em>ChannelMessage.Send</em> permission; configure OAuth2 client credentials.</div>
+</div>
+<div class="field">
+  <div class="label">When to pick</div>
+  <div>If we ever need richer features (replies, mentions, reactions). Heavier auth setup; overkill for current scope.</div>
+</div>
+
+<h3>Option C — Email via AWS SES</h3>
+<div class="field">
+  <div class="label">Service</div>
+  <div>Amazon Simple Email Service (already available in our AWS account).</div>
+</div>
+<div class="field">
+  <div class="label">What it is</div>
+  <div>Transactional email. Each input request becomes an email to the recipient with a deep link.</div>
+</div>
+<div class="field">
+  <div class="label">Cost</div>
+  <div>$0.10 per 1,000 emails. Effectively free at our volume. Free tier covers 62,000 emails/month from EC2.</div>
+</div>
+<div class="field">
+  <div class="label">Setup</div>
+  <div>Verify our sending domain (DNS records); request SES production access from AWS (typically same-day approval).</div>
+</div>
+<div class="field">
+  <div class="label">When to pick</div>
+  <div>If we want notifications that don't depend on Teams at all, or as a fallback alongside Option A.</div>
+</div>
+
+<h3>Option D — In-app notifications only (no external service)</h3>
+<div class="field">
+  <div class="label">Service</div>
+  <div>None. The notification lives inside our own app.</div>
+</div>
+<div class="field">
+  <div class="label">What it is</div>
+  <div>A notification badge in the navigation bar that shows pending input requests when the user logs in. The data is already collected — only the UI is missing.</div>
+</div>
+<div class="field">
+  <div class="label">Cost</div>
+  <div>Zero. No third-party dependency.</div>
+</div>
+<div class="field">
+  <div class="label">Setup</div>
+  <div>Add a badge component and a small polling call to the existing endpoint.</div>
+</div>
+<div class="field">
+  <div class="label">When to pick</div>
+  <div>If push notifications aren't critical. Trade-off: recipients only see requests when they next visit the app.</div>
+</div>
+
+<h3>Option E — Slack Incoming Webhooks</h3>
+<div class="field">
+  <div class="label">Service</div>
+  <div>Slack incoming webhooks (still actively supported, unlike Teams connectors).</div>
+</div>
+<div class="field">
+  <div class="label">Cost</div>
+  <div>Free for any Slack workspace tier.</div>
+</div>
+<div class="field">
+  <div class="label">Setup</div>
+  <div>Create a Slack app, add an incoming webhook for the target channel, copy URL into our environment variables.</div>
+</div>
+<div class="field">
+  <div class="label">When to pick</div>
+  <div>Only relevant if Rian considers Slack as its primary chat platform. Not useful while we are on Teams.</div>
+</div>
+
+<h3>Recommendation</h3>
+<div class="field">
+  <div class="label">Primary</div>
+  <div><strong>Option A</strong> — Power Automate Workflows. Smallest change, stays on Teams, fully supported.</div>
+</div>
+<div class="field">
+  <div class="label">Optional add-on</div>
+  <div><strong>Option D</strong> — In-app badge. Inexpensive and removes any "did the notification arrive?" doubt.</div>
+</div>
+<div class="field">
+  <div class="label">Effort</div>
+  <div><span class="pill pill-low">Small</span> — about half a day for Option A; add 1–2 hours for Option D.</div>
+</div>
+<div class="field">
+  <div class="label">Risk if no action</div>
+  <div>Notifications silently stop. The Request Input collaboration feature breaks without raising any visible error.</div>
+</div>
+
+<h2>2. Session storage — survive deploys and scaling</h2>
+
+<div class="field">
+  <div class="label">What we change</div>
+  <div>Move user-session storage from server memory to the existing Supabase Postgres database. Optionally extend auto-save coverage to a handful of pipeline stages that currently don't persist.</div>
+</div>
+<div class="field">
+  <div class="label">Why</div>
+  <div>Today, sessions live in the memory of a single EC2 instance. Every backend deploy or auto-scaling event silently logs all active users out and loses any work that hasn't yet hit auto-save.</div>
+</div>
+
+<h3>Current behaviour</h3>
+<ul>
+  <li>Hosting auto-scales between 1 and 4 instances.</li>
+  <li>Sessions only exist on the instance that created them.</li>
+  <li>Project state auto-saves at some pipeline transitions, but not during the intake conversation or while the PRD is being streamed.</li>
+</ul>
+
+<div class="field">
+  <div class="label">Code change</div>
+  <div>Activate a session store that is already partially coded in <em>server/services/sessionStore.js</em>; add one environment variable; run one SQL migration on Supabase.</div>
+</div>
+<div class="field">
+  <div class="label">Optional add-on</div>
+  <div>Save pipeline state at the missing transition points (mid-intake, post-Writer, after each specialist agent). About 20 minutes of additional work.</div>
+</div>
+<div class="field">
+  <div class="label">Risk if no action</div>
+  <div>Users lose their place every time we deploy. Failure mode worsens if traffic ever causes auto-scaling to add a second instance — at that point, roughly half of every user's requests will fail with a re-login prompt.</div>
+</div>
+<div class="field">
+  <div class="label">Effort</div>
+  <div><span class="pill pill-low">Small</span> — about one hour including the optional add-on. No new infrastructure or cost.</div>
+</div>
+
+<div class="footer">
+  PRD Pipeline · Rian internal tool · Prepared for review
+</div>
+
+</body>
+</html>

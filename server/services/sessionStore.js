@@ -4,25 +4,52 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-// Parse Supabase URL to get PostgreSQL connection details
-const supabaseUrl = process.env.SUPABASE_URL;
-const projectRef = supabaseUrl?.match(/https:\/\/(.+?)\.supabase\.co/)?.[1];
+/**
+ * Persistent session storage backed by Supabase Postgres.
+ *
+ * Setup:
+ *   1. Run server/migrations/create_sessions_table.sql once on Supabase
+ *      (Supabase dashboard → SQL Editor → paste + Run).
+ *   2. Set DATABASE_URL in env to the Supabase **Session pooler** URL:
+ *        postgresql://postgres.PROJECTREF:PASSWORD@aws-0-<REGION>.pooler.supabase.com:5432/postgres
+ *      Copy this string from Supabase dashboard → Project Settings → Database →
+ *      Connection string → "Session" mode.
+ *
+ * If DATABASE_URL is not set, the server falls back to in-memory sessions and
+ * logs a warning. The app still runs but sessions die on every restart.
+ */
 
-if (!projectRef || !process.env.SUPABASE_DB_PASSWORD) {
-  console.warn('Supabase DB credentials not configured. Using in-memory sessions (not recommended for production)');
+const databaseUrl = process.env.DATABASE_URL;
+
+let pool = null;
+let sessionStore = null;
+
+if (databaseUrl) {
+  pool = new Pool({
+    connectionString: databaseUrl,
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    idleTimeoutMillis: 30000,
+  });
+
+  pool.on('error', (err) => {
+    console.error('Postgres session pool error:', err.message);
+  });
+
+  const PgStore = connectPgSimple(session);
+  sessionStore = new PgStore({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true,
+    pruneSessionInterval: 60 * 60, // expired-session cleanup every hour
+  });
+
+  console.log('✓ PostgreSQL session storage enabled (Supabase pooler)');
+} else {
+  console.warn('⚠️  DATABASE_URL not set — using in-memory sessions.');
+  console.warn('    Sessions will NOT survive server restarts.');
+  console.warn('    To enable persistent sessions: set DATABASE_URL to the Supabase Session pooler URL.');
 }
-
-// IMPORTANT: PostgreSQL session storage is DISABLED for now
-// Reason: Render cannot connect to Supabase PostgreSQL via IPv6
-// Workaround: Using in-memory sessions (works for single-server deployment)
-// Future fix: Need to configure Supabase connection pooler with correct region
-// or use a different session storage mechanism (Redis, etc.)
-
-console.warn('⚠️  PostgreSQL session storage is disabled');
-console.warn('    Using in-memory sessions (not persistent across server restarts)');
-console.warn('    To enable: Fix PostgreSQL connection in sessionStore.js');
-
-const sessionStore = null;
 
 export { sessionStore };
 
@@ -35,7 +62,7 @@ export function getSessionMiddleware() {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   };
 

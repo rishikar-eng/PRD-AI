@@ -8,6 +8,14 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
   const [prdText, setPrdText] = useState(externalPRDMode ? externalPRD : '');
   const [isStreaming, setIsStreaming] = useState(false);
 
+  // QC result is structurally different (has scores), so it lives in its own state slot
+  const [qcResult, setQcResult] = useState({
+    scores: null,
+    comments: [],
+    loading: false,
+    complete: false,
+  });
+
   // Agent feedback state
   const [agentFeedback, setAgentFeedback] = useState({
     deliveryReality: { comments: [], loading: false, complete: false },
@@ -27,7 +35,8 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
 
   const [currentOwnerResponse, setCurrentOwnerResponse] = useState('');
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
-  const [error, setError] = useState('');
+  // error: null | { message: string, retry: () => void }
+  const [error, setError] = useState(null);
   const prdAccumulator = useRef('');
 
   useEffect(() => {
@@ -41,7 +50,7 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
 
   const runWriterAgent = async () => {
     setIsStreaming(true);
-    setError('');
+    setError(null);
     prdAccumulator.current = '';
 
     try {
@@ -52,11 +61,15 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
         body: JSON.stringify({ structuredData }),
       });
 
-      if (!response.ok) throw new Error('Writer agent failed');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Writer agent failed (HTTP ${response.status})`);
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let streamError = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -67,31 +80,81 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                prdAccumulator.current += data.content;
-                setPrdText(prdAccumulator.current);
-              }
-              if (data.done) {
-                setIsStreaming(false);
-                setTimeout(() => {
-                  setCurrentAgent('deliveryReality');
-                  runSpecialistAgent('deliveryReality', prdAccumulator.current);
-                }, 1000);
-              }
-              if (data.error) throw new Error(data.error);
-            } catch (e) {
-              console.error('Parse error:', e);
-            }
+          if (!line.startsWith('data: ')) continue;
+          let data;
+          try {
+            data = JSON.parse(line.slice(6));
+          } catch (parseErr) {
+            console.error('SSE parse error:', parseErr);
+            continue;
+          }
+          if (data.error) {
+            streamError = data.error;
+            break;
+          }
+          if (data.content) {
+            prdAccumulator.current += data.content;
+            setPrdText(prdAccumulator.current);
+          }
+          if (data.done) {
+            setIsStreaming(false);
+            setTimeout(() => {
+              setCurrentAgent('qc');
+              runQcAgent(prdAccumulator.current);
+            }, 1000);
           }
         }
+        if (streamError) break;
       }
+
+      if (streamError) throw new Error(streamError);
     } catch (err) {
       console.error('Writer error:', err);
-      setError('Writer agent failed');
+      setError({
+        message: err.message || 'Writer agent failed. Check your connection and try again.',
+        retry: runWriterAgent,
+      });
       setIsStreaming(false);
+    }
+  };
+
+  const runQcAgent = async (prd) => {
+    setQcResult((prev) => ({ ...prev, loading: true }));
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/agents/qc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ prdText: prd || prdText }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `QC agent failed (HTTP ${response.status})`);
+      }
+
+      const data = await response.json();
+      setQcResult({
+        scores: data.scores || null,
+        comments: data.comments || [],
+        loading: false,
+        complete: true,
+      });
+
+      // QC runs automatically; auto-advance to the first specialist
+      setTimeout(() => {
+        setCurrentAgent('deliveryReality');
+        runSpecialistAgent('deliveryReality', prd || prdText);
+      }, 1000);
+    } catch (err) {
+      console.error('QC error:', err);
+      setError({
+        message: err.message || 'QC agent failed. Try again or check the OpenAI service status.',
+        retry: () => runQcAgent(prd),
+      });
+      setQcResult((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -100,7 +163,7 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
       ...prev,
       [agentName]: { ...prev[agentName], loading: true },
     }));
-    setError('');
+    setError(null);
 
     const endpoints = {
       deliveryReality: 'delivery-reality',
@@ -117,7 +180,10 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
         body: JSON.stringify({ prdText: prd || prdText }),
       });
 
-      if (!response.ok) throw new Error(`${agentName} agent failed`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `${agentLabels[agentName]} agent failed (HTTP ${response.status})`);
+      }
 
       const data = await response.json();
       setAgentFeedback(prev => ({
@@ -126,7 +192,10 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
       }));
     } catch (err) {
       console.error(`${agentName} error:`, err);
-      setError(`${agentName} agent failed`);
+      setError({
+        message: err.message || `${agentLabels[agentName]} agent failed. Try again or check the OpenAI service status.`,
+        retry: () => runSpecialistAgent(agentName, prd),
+      });
       setAgentFeedback(prev => ({
         ...prev,
         [agentName]: { ...prev[agentName], loading: false },
@@ -183,7 +252,7 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
       ...prev,
       debate: { ...prev.debate, loading: true },
     }));
-    setError('');
+    setError(null);
 
     try {
       const response = await fetch(`${API_URL}/api/agents/debate`, {
@@ -192,7 +261,10 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
         credentials: 'include',
       });
 
-      if (!response.ok) throw new Error('Debate agent failed');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Debate agent failed (HTTP ${response.status})`);
+      }
 
       const data = await response.json();
       setAgentFeedback(prev => ({
@@ -210,13 +282,17 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
       setTimeout(() => {
         onComplete({
           prd: prdText,
+          qcResult,
           agentFeedback,
           debateResult: data,
         });
       }, 1500);
     } catch (err) {
       console.error('Debate error:', err);
-      setError('Debate agent failed');
+      setError({
+        message: err.message || 'Debate agent failed. Try again or check the OpenAI service status.',
+        retry: runDebateAgent,
+      });
       setAgentFeedback(prev => ({
         ...prev,
         debate: { ...prev.debate, loading: false },
@@ -226,6 +302,7 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
 
   const agentLabels = {
     writer: 'Writer',
+    qc: 'QC',
     deliveryReality: 'Delivery Reality',
     technicalFeasibility: 'Technical',
     businessValue: 'Business',
@@ -233,11 +310,12 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
     debate: 'Debate',
   };
 
-  const agentOrder = ['writer', 'deliveryReality', 'technicalFeasibility', 'businessValue', 'security', 'debate'];
+  const agentOrder = ['writer', 'qc', 'deliveryReality', 'technicalFeasibility', 'businessValue', 'security', 'debate'];
   const needsOwnerResponse = ['deliveryReality', 'technicalFeasibility', 'businessValue', 'security'];
 
   const isAgentComplete = (agent) => {
     if (agent === 'writer') return !!prdText;
+    if (agent === 'qc') return qcResult.complete;
     return agentFeedback[agent]?.complete;
   };
 
@@ -261,7 +339,7 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
         {agentOrder.map(agent => {
           const isActive = currentAgent === agent;
           const isComplete = isAgentComplete(agent);
-          const isLoading = agentFeedback[agent]?.loading;
+          const isLoading = agent === 'qc' ? qcResult.loading : agentFeedback[agent]?.loading;
 
           return (
             <div
@@ -293,7 +371,22 @@ export default function AgentPipelineV2({ structuredData, onComplete, externalPR
           background: 'rgba(239, 68, 68, 0.1)',
           borderColor: 'rgba(239, 68, 68, 0.3)',
         }}>
-          <div style={{ color: '#ef4444', fontSize: '14px' }}>{error}</div>
+          <div style={{ color: '#ef4444', fontSize: '14px', marginBottom: error.retry ? '12px' : 0, lineHeight: 1.6 }}>
+            ⚠ {error.message}
+          </div>
+          {error.retry && (
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                const retry = error.retry;
+                setError(null);
+                retry();
+              }}
+              style={{ fontSize: '13px' }}
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 

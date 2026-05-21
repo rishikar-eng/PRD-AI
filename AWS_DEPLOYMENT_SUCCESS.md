@@ -161,6 +161,9 @@ eb terminate prd-pipeline-production
 5. Alert threshold: 80% ($8)
 6. Email: your-email@example.com
 
+
+
+
 This ensures you never exceed your $10 budget!
 
 ---

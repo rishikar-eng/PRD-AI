@@ -1,5 +1,6 @@
 import express from 'express';
 import { chatCompletion } from '../services/ai.js';
+import { getAgentContext, getSelectedPrdIds } from '../services/projectContext.js';
 import { getIntakeSystemPrompt } from '../prompts/intake.js';
 import { getSuccessMetricPrompt } from '../prompts/successMetric.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -12,7 +13,7 @@ const router = express.Router();
  * Start the intake conversation
  */
 router.post('/start', requireAuth, async (req, res) => {
-  const { role, input, inputMode } = req.body;
+  const { role, input, inputMode, contextPrdIds } = req.body;
 
   if (!role || !input) {
     return res.status(400).json({ error: 'Role and input required' });
@@ -24,8 +25,15 @@ router.post('/start', requireAuth, async (req, res) => {
     state.input = { raw: input, mode: inputMode };
     state.stage = 1; // Move to intake stage
 
-    // Initialize conversation
-    const systemPrompt = getIntakeSystemPrompt(role);
+    // Store the user's PRD-picker selection. Read by every agent route via
+    // getSelectedPrdIds() in services/projectContext.js.
+    if (Array.isArray(contextPrdIds)) {
+      state.contextPrdIds = contextPrdIds;
+    }
+
+    // Initialize conversation — prepend project context so the intake AI asks Rian-specific questions
+    const context = await getAgentContext(getSelectedPrdIds(req));
+    const systemPrompt = context + getIntakeSystemPrompt(role);
 
     // Determine the level of detail in the input
     const inputLength = input.split(/\s+/).length;
@@ -150,6 +158,8 @@ router.post('/reply', requireAuth, async (req, res) => {
     }
 
     const turnCount = Math.floor(history.filter(m => m.role === 'user').length);
+
+    await saveProject(req);
 
     res.json({
       question,

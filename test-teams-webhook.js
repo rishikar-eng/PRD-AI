@@ -1,11 +1,15 @@
 /**
- * Test script to verify Microsoft Teams webhook is working
+ * Test script to verify a Microsoft Teams Power Automate webhook is working.
+ *
+ * Payload format: Adaptive Card v1.5 wrapped in the Power Automate message
+ * envelope. The legacy MessageCard format used by Office 365 connectors is
+ * retired and will fail with new "Workflows" webhooks.
  *
  * Usage:
  *   node test-teams-webhook.js <webhook-url>
  *
  * Example:
- *   node test-teams-webhook.js "https://rianio.webhook.office.com/webhookb2/..."
+ *   node test-teams-webhook.js "https://prod-XX.westus.logic.azure.com:443/workflows/..."
  */
 
 const webhookUrl = process.argv[2];
@@ -18,28 +22,49 @@ if (!webhookUrl) {
 }
 
 const testMessage = {
-  "@type": "MessageCard",
-  "@context": "https://schema.org/extensions",
-  "summary": "Test Message from PRD Pipeline",
-  "themeColor": "f472b6",
-  "title": "🧪 Teams Webhook Test",
-  "sections": [
+  type: 'message',
+  attachments: [
     {
-      "activityTitle": "PRD Pipeline Setup Test",
-      "activitySubtitle": "If you see this, your webhook is working!",
-      "facts": [
-        {
-          "name": "Status:",
-          "value": "✅ Successfully configured"
-        },
-        {
-          "name": "Timestamp:",
-          "value": new Date().toLocaleString()
-        }
-      ],
-      "text": "You can now receive PRD input request notifications in this channel."
-    }
-  ]
+      contentType: 'application/vnd.microsoft.card.adaptive',
+      contentUrl: null,
+      content: {
+        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+        type: 'AdaptiveCard',
+        version: '1.5',
+        body: [
+          {
+            type: 'TextBlock',
+            text: 'Teams Webhook Test',
+            size: 'Large',
+            weight: 'Bolder',
+            color: 'Accent',
+            wrap: true,
+          },
+          {
+            type: 'TextBlock',
+            text: 'If you see this, your Power Automate webhook is working.',
+            wrap: true,
+            spacing: 'Small',
+          },
+          {
+            type: 'FactSet',
+            spacing: 'Medium',
+            facts: [
+              { title: 'Status:', value: 'Successfully configured' },
+              { title: 'Timestamp:', value: new Date().toLocaleString() },
+            ],
+          },
+          {
+            type: 'TextBlock',
+            text: 'You can now receive PRD input request notifications in this channel.',
+            wrap: true,
+            isSubtle: true,
+            spacing: 'Medium',
+          },
+        ],
+      },
+    },
+  ],
 };
 
 console.log('📤 Sending test message to Teams...\n');

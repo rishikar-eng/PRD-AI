@@ -77,6 +77,58 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 /**
+ * SPEC: GET /api/projects/all
+ * Purpose: List every PRD in the DB. Used by the PRD-picker modal so the user
+ *          can include past PRDs as context for a new generation run.
+ * Inputs: None
+ * Outputs: Array of { id, title, stage, owner, created_at, updated_at, hasContent }
+ * Side effects: None
+ * Error states: 500 on DB error
+ *
+ * NOTE: Must be declared BEFORE GET /:id (same lesson as /current and /team).
+ */
+router.get('/all', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, title, stage, user_email, session_data, created_at, updated_at')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+
+    const projects = (data || []).map((p) => ({
+      id: p.id,
+      title: p.title,
+      stage: p.stage,
+      owner: p.user_email,
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      hasContent: !!(p.session_data?.prd?.finalPRD || p.session_data?.prd?.v0),
+    }));
+
+    res.json(projects);
+  } catch (error) {
+    console.error('List all projects error:', error);
+    res.status(500).json({ error: 'Failed to list projects' });
+  }
+});
+
+/**
+ * SPEC: GET /api/projects/current
+ * Purpose: Get the currently active project ID from session
+ * Inputs: None - reads projectId from session
+ * Outputs: { projectId } or null if no active project
+ * Side effects: None - read-only
+ * Error states: None - returns null if no project
+ *
+ * NOTE: Must be declared BEFORE GET /:id, otherwise Express's left-to-right
+ * matching catches "/current" with the :id wildcard.
+ */
+router.get('/current', requireAuth, async (req, res) => {
+  const projectId = req.session.pipelineState?.projectId || null;
+  res.json({ projectId });
+});
+
+/**
  * SPEC: GET /api/projects/:id
  * Purpose: Get a single project by ID
  * Inputs: id in URL params
@@ -103,6 +155,49 @@ router.get('/:id', requireAuth, async (req, res) => {
     res.json(data);
   } catch (error) {
     console.error('Get project error:', error);
+    res.status(500).json({ error: 'Failed to load project' });
+  }
+});
+
+/**
+ * SPEC: GET /api/projects/:id/view
+ * Purpose: Read-only view of any project (any authenticated user, not just owner).
+ *          Used by Team Directory click-throughs.
+ * Inputs: id in URL params
+ * Outputs: { id, title, featureName, prd, stage, owner, createdAt, updatedAt }
+ * Side effects: None
+ * Error states: 404 if project not found, 500 on DB error
+ */
+router.get('/:id/view', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, title, stage, user_email, session_data, created_at, updated_at')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const sd = data.session_data || {};
+    const featureName = sd.intake?.structuredData?.featureName || data.title;
+    const prd = sd.prd?.finalPRD || sd.prd?.v0 || '';
+
+    res.json({
+      id: data.id,
+      title: data.title,
+      featureName,
+      prd,
+      stage: data.stage,
+      owner: data.user_email,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    });
+  } catch (error) {
+    console.error('View project error:', error);
     res.status(500).json({ error: 'Failed to load project' });
   }
 });
@@ -222,19 +317,6 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
     console.error('Restore project error:', error);
     res.status(500).json({ error: 'Failed to restore project' });
   }
-});
-
-/**
- * SPEC: GET /api/projects/current
- * Purpose: Get the currently active project ID from session
- * Inputs: None - reads projectId from session
- * Outputs: { projectId } or null if no active project
- * Side effects: None - read-only
- * Error states: None - returns null if no project
- */
-router.get('/current', requireAuth, async (req, res) => {
-  const projectId = req.session.pipelineState?.projectId || null;
-  res.json({ projectId });
 });
 
 /**

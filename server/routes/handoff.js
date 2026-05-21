@@ -4,6 +4,7 @@ import { chatCompletion } from '../services/ai.js';
 import { getStage2HandoffPrompt } from '../prompts/stage2Handoff.js';
 import { getClaudeContextPrompt } from '../prompts/claudeContext.js';
 import { buildStage2Zip } from '../services/zipBuilder.js';
+import { buildPRDDocx } from '../services/docxBuilder.js';
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -13,6 +14,42 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+/**
+ * POST /api/handoff/docx
+ * Generate a styled .docx version of the finalized PRD.
+ * Body: { prdText, featureName, role?, author? }
+ * Returns: docx file as attachment.
+ */
+router.post('/docx', requireAuth, async (req, res) => {
+  const { prdText, featureName, role, author } = req.body;
+
+  if (!prdText) {
+    return res.status(400).json({ error: 'prdText is required' });
+  }
+
+  try {
+    const buffer = await buildPRDDocx({
+      prdText,
+      featureName: featureName || 'Untitled Feature',
+      role,
+      author: author || req.session.userEmail,
+    });
+
+    const safeName = (featureName || 'PRD').replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${safeName}_PRD_${Date.now()}.docx`;
+
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  } catch (error) {
+    console.error('PRD docx generation error:', error);
+    res.status(500).json({ error: 'Failed to generate PRD docx' });
+  }
+});
 
 /**
  * POST /api/handoff/stage2

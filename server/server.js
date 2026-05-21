@@ -38,6 +38,7 @@ import projectsRoutes from './routes/projects.js';
 import shareRoutes from './routes/share.js';
 import handoffRoutes from './routes/handoff.js';
 import inputRequestsRoutes from './routes/inputRequests.js';
+import teamRoutes from './routes/team.js';
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -47,6 +48,7 @@ app.use('/api/projects', projectsRoutes);
 app.use('/api/share', shareRoutes);
 app.use('/api/handoff', handoffRoutes);
 app.use('/api/input-requests', inputRequestsRoutes);
+app.use('/api/team', teamRoutes);
 
 // Error handling
 app.use((err, req, res, next) => {

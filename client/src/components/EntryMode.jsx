@@ -1,26 +1,42 @@
 import React, { useState } from 'react';
+import PRDPickerModal from './PRDPickerModal';
 
 const ROLES = ['CEO / Founder', 'Product', 'Tech Lead', 'R&D'];
 const INPUT_MODES = ['oneline', 'notes', 'upload'];
+const MAX_UPLOAD_BYTES = 1024 * 1024; // 1 MB — beyond this the file won't fit in the model context anyway
 
 export default function EntryMode({ onNext }) {
   const [selectedMode, setSelectedMode] = useState('oneline');
   const [selectedRole, setSelectedRole] = useState('');
   const [input, setInput] = useState('');
   const [fileName, setFileName] = useState('');
+  const [contextPrdIds, setContextPrdIds] = useState([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (file && (file.type === 'text/plain' || file.type === 'text/markdown' || file.name.endsWith('.md'))) {
-      setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setInput(event.target.result);
-      };
-      reader.readAsText(file);
-    } else {
+    if (!file) return;
+
+    const isTextFile = file.type === 'text/plain' || file.type === 'text/markdown' || file.name.endsWith('.md');
+    if (!isTextFile) {
       alert('Please upload a .txt or .md file');
+      e.target.value = '';
+      return;
     }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      const sizeMb = (file.size / 1024 / 1024).toFixed(2);
+      alert(`File is ${sizeMb} MB. Maximum allowed is 1 MB.`);
+      e.target.value = '';
+      return;
+    }
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setInput(event.target.result);
+    };
+    reader.readAsText(file);
   };
 
   const canProceed = () => {
@@ -33,6 +49,7 @@ export default function EntryMode({ onNext }) {
         role: selectedRole,
         input: input.trim(),
         inputMode: selectedMode,
+        contextPrdIds,
       });
     }
   };
@@ -144,6 +161,38 @@ export default function EntryMode({ onNext }) {
         </div>
       </div>
 
+      {/* Past-PRD context picker */}
+      <div className="card" style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: '4px', fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              Reference past PRDs <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>(optional)</span>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+              Selected PRDs are included as context for the writer and specialists — useful when this feature builds on or relates to past work.
+            </div>
+            {contextPrdIds.length > 0 && (
+              <div style={{
+                marginTop: '10px', display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '4px 10px', borderRadius: '999px',
+                background: 'rgba(94, 234, 212, 0.08)',
+                border: '1px solid rgba(94, 234, 212, 0.25)',
+                fontSize: '12px', fontWeight: 600, color: 'var(--teal)',
+              }}>
+                {contextPrdIds.length} PRD{contextPrdIds.length === 1 ? '' : 's'} selected
+              </div>
+            )}
+          </div>
+          <button
+            className="btn-secondary"
+            onClick={() => setPickerOpen(true)}
+            style={{ flexShrink: 0, fontSize: '13px' }}
+          >
+            {contextPrdIds.length > 0 ? 'Edit selection' : 'Choose PRDs'}
+          </button>
+        </div>
+      </div>
+
       {/* Next Button */}
       <div style={{ textAlign: 'right' }}>
         <button
@@ -154,6 +203,14 @@ export default function EntryMode({ onNext }) {
           Begin AI Intake →
         </button>
       </div>
+
+      {pickerOpen && (
+        <PRDPickerModal
+          initialSelectedIds={contextPrdIds}
+          onClose={() => setPickerOpen(false)}
+          onSave={(ids) => setContextPrdIds(ids)}
+        />
+      )}
     </div>
   );
 }

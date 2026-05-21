@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
  * Side effects: Fetches projects from /api/projects on mount
  * Error states: Shows error message if fetch fails
  */
-export default function Dashboard({ onNewProject, onResumeProject }) {
+export default function Dashboard({ onNewProject, onResumeProject, onOpenTeam }) {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -102,9 +102,16 @@ export default function Dashboard({ onNewProject, onResumeProject }) {
             {projects.length} {projects.length === 1 ? 'project' : 'projects'}
           </p>
         </div>
-        <button className="btn-primary" onClick={onNewProject}>
-          + New PRD
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          {onOpenTeam && (
+            <button className="btn-secondary" onClick={onOpenTeam}>
+              Team Directory
+            </button>
+          )}
+          <button className="btn-primary" onClick={onNewProject}>
+            + New PRD
+          </button>
+        </div>
       </div>
 
       {error && (

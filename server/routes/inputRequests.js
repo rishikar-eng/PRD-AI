@@ -104,6 +104,30 @@ router.get('/pending', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/input-requests/team
+ * Get all team members with their expertise
+ *
+ * NOTE: Must be declared BEFORE GET /:id, otherwise Express's left-to-right
+ * matching catches "/team" with the :id wildcard.
+ */
+router.get('/team', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('team_expertise')
+      .select('*')
+      .eq('active', true)
+      .order('user_name');
+
+    if (error) throw error;
+
+    res.json(data || []);
+  } catch (error) {
+    console.error('Get team error:', error);
+    res.status(500).json({ error: 'Failed to load team' });
+  }
+});
+
+/**
  * GET /api/input-requests/:id
  * Get a specific input request (for response page)
  */
@@ -242,27 +266,6 @@ router.get('/prd/:prdId', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Get PRD input requests error:', error);
     res.status(500).json({ error: 'Failed to load input requests' });
-  }
-});
-
-/**
- * GET /api/team
- * Get all team members with their expertise
- */
-router.get('/team', requireAuth, async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('team_expertise')
-      .select('*')
-      .eq('active', true)
-      .order('user_name');
-
-    if (error) throw error;
-
-    res.json(data || []);
-  } catch (error) {
-    console.error('Get team error:', error);
-    res.status(500).json({ error: 'Failed to load team' });
   }
 });
 

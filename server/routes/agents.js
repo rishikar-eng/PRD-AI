@@ -1,6 +1,8 @@
 import express from 'express';
-import { chatCompletion, streamChatCompletion } from '../services/ai.js';
+import { chatCompletion, streamChatCompletion, anthropicCompletion } from '../services/ai.js';
+import { getAgentContext, getSelectedPrdIds } from '../services/projectContext.js';
 import { getWriterSystemPrompt } from '../prompts/writer.js';
+import { getQCSystemPrompt } from '../prompts/qc.js';
 import { getDeliveryRealityPrompt } from '../prompts/deliveryReality.js';
 import { getTechnicalFeasibilityPrompt } from '../prompts/technicalFeasibility.js';
 import { getBusinessValuePrompt } from '../prompts/businessValue.js';
@@ -29,7 +31,8 @@ router.post('/writer', requireAuth, async (req, res) => {
     const role = state.role;
 
     // Build the prompt with structured data
-    const systemPrompt = getWriterSystemPrompt(role);
+    const context = await getAgentContext(getSelectedPrdIds(req));
+    const systemPrompt = context + getWriterSystemPrompt(role);
     const userPrompt = `Generate a complete PRD for the following feature:
 
 FEATURE: ${structuredData.featureName || 'Untitled Feature'}
@@ -72,6 +75,9 @@ Write the complete PRD now.`;
     // Store PRD in session
     state.prd.v0 = fullPRD;
 
+    // Persist before signalling done — protects against server crash between stages
+    await saveProject(req);
+
     // Send completion signal
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
@@ -79,6 +85,56 @@ Write the complete PRD now.`;
     console.error('Writer agent error:', error);
     res.write(`data: ${JSON.stringify({ error: 'Writer agent failed' })}\n\n`);
     res.end();
+  }
+});
+
+/**
+ * POST /api/agents/qc
+ * QC Agent — scores PRD on 4 dimensions and produces constructive comments.
+ * Runs automatically between writer and specialists. No owner interaction.
+ */
+router.post('/qc', requireAuth, async (req, res) => {
+  const { prdText } = req.body;
+
+  if (!prdText) {
+    return res.status(400).json({ error: 'PRD text required' });
+  }
+
+  try {
+    const systemPrompt = getQCSystemPrompt();
+    const userPrompt = `Score and review this PRD:\n\n${prdText}`;
+
+    const response = await chatCompletion([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+
+    // Parse JSON; tolerate prose around it
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in QC response');
+    }
+    const qcResult = JSON.parse(jsonMatch[0]);
+
+    // Ensure each comment has agent='QC' so the review UI groups them correctly
+    if (Array.isArray(qcResult.comments)) {
+      qcResult.comments = qcResult.comments.map((c, i) => ({
+        ...c,
+        id: c.id || `qc-${i + 1}`,
+        agent: 'QC',
+        status: c.status || 'pending',
+      }));
+    }
+
+    // Stash in session for the review stage to read
+    const state = req.session.pipelineState;
+    state.prd.qcResult = qcResult;
+
+    await saveProject(req);
+    res.json(qcResult);
+  } catch (error) {
+    console.error('QC agent error:', error);
+    res.status(500).json({ error: 'QC agent failed' });
   }
 });
 
@@ -94,7 +150,8 @@ router.post('/delivery-reality', requireAuth, async (req, res) => {
   }
 
   try {
-    const systemPrompt = getDeliveryRealityPrompt();
+    const context = await getAgentContext(getSelectedPrdIds(req));
+    const systemPrompt = context + getDeliveryRealityPrompt();
     const userPrompt = `Review this PRD:\n\n${prdText}`;
 
     const response = await chatCompletion([
@@ -114,6 +171,7 @@ router.post('/delivery-reality', requireAuth, async (req, res) => {
     const state = req.session.pipelineState;
     state.prd.agentFeedback.deliveryReality.comments = result.comments || [];
 
+    await saveProject(req);
     res.json(result);
   } catch (error) {
     console.error('Delivery Reality agent error:', error);
@@ -145,7 +203,8 @@ router.post('/technical-feasibility', requireAuth, async (req, res) => {
       context += `OWNER RESPONSE: ${state.prd.agentFeedback.deliveryReality.ownerResponse || 'No response yet'}\n\n`;
     }
 
-    const systemPrompt = getTechnicalFeasibilityPrompt();
+    const projectCtx = await getAgentContext(getSelectedPrdIds(req));
+    const systemPrompt = projectCtx + getTechnicalFeasibilityPrompt();
     const userPrompt = context + `\nReview this PRD from a technical feasibility perspective.`;
 
     const response = await chatCompletion([
@@ -161,6 +220,7 @@ router.post('/technical-feasibility', requireAuth, async (req, res) => {
     const result = JSON.parse(jsonMatch[0]);
     state.prd.agentFeedback.technicalFeasibility.comments = result.comments || [];
 
+    await saveProject(req);
     res.json(result);
   } catch (error) {
     console.error('Technical Feasibility agent error:', error);
@@ -195,7 +255,8 @@ router.post('/business-value', requireAuth, async (req, res) => {
       context += `OWNER: ${state.prd.agentFeedback.technicalFeasibility.ownerResponse || 'No response'}\n\n`;
     }
 
-    const systemPrompt = getBusinessValuePrompt();
+    const projectCtx = await getAgentContext(getSelectedPrdIds(req));
+    const systemPrompt = projectCtx + getBusinessValuePrompt();
     const userPrompt = context + `\nReview this PRD from a business value perspective.`;
 
     const response = await chatCompletion([
@@ -211,6 +272,7 @@ router.post('/business-value', requireAuth, async (req, res) => {
     const result = JSON.parse(jsonMatch[0]);
     state.prd.agentFeedback.businessValue.comments = result.comments || [];
 
+    await saveProject(req);
     res.json(result);
   } catch (error) {
     console.error('Business Value agent error:', error);
@@ -243,7 +305,8 @@ router.post('/security', requireAuth, async (req, res) => {
       }
     });
 
-    const systemPrompt = getSecurityPrompt();
+    const projectCtx = await getAgentContext(getSelectedPrdIds(req));
+    const systemPrompt = projectCtx + getSecurityPrompt();
     const userPrompt = context + `\nReview this PRD from a security perspective.`;
 
     const response = await chatCompletion([
@@ -259,6 +322,7 @@ router.post('/security', requireAuth, async (req, res) => {
     const result = JSON.parse(jsonMatch[0]);
     state.prd.agentFeedback.security.comments = result.comments || [];
 
+    await saveProject(req);
     res.json(result);
   } catch (error) {
     console.error('Security agent error:', error);
@@ -297,7 +361,9 @@ router.post('/debate', requireAuth, async (req, res) => {
     const systemPrompt = getDebateSystemPrompt(specialistFeedback);
     const userPrompt = `Review the specialist feedback and identify meta-level concerns.`;
 
-    const response = await chatCompletion([
+    // Debate agent uses Claude (Anthropic) — better at nuanced meta-reasoning
+    // across multiple specialist outputs than gpt-4o in our testing.
+    const response = await anthropicCompletion([
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ]);

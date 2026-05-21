@@ -1,9 +1,12 @@
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 const MODEL = 'gpt-4o';
+const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
-// Lazy initialization - only create client when needed
+// Lazy initialization - only create clients when needed
 let openai = null;
+let anthropic = null;
 
 function getOpenAIClient() {
   if (!openai) {
@@ -15,6 +18,18 @@ function getOpenAIClient() {
     });
   }
   return openai;
+}
+
+function getAnthropicClient() {
+  if (!anthropic) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+    }
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+  }
+  return anthropic;
 }
 
 /**
@@ -47,6 +62,40 @@ export async function chatCompletion(messages, options = {}) {
   } catch (error) {
     console.error('OpenAI API error:', error);
     throw new Error('AI service unavailable');
+  }
+}
+
+/**
+ * Anthropic completion — same interface as chatCompletion but routes to Claude.
+ * Used today only by the debate agent (meta-layer reasoning across specialist outputs).
+ * Accepts the same { role, content } messages array; system messages are extracted
+ * into Anthropic's separate `system` parameter automatically.
+ */
+export async function anthropicCompletion(messages, options = {}) {
+  try {
+    const client = getAnthropicClient();
+
+    const systemContent = messages
+      .filter((m) => m.role === 'system')
+      .map((m) => m.content)
+      .join('\n\n');
+
+    const conversation = messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const response = await client.messages.create({
+      model: ANTHROPIC_MODEL,
+      max_tokens: options.maxTokens || options.max_tokens || 4000,
+      temperature: options.temperature ?? 0.7,
+      system: systemContent || undefined,
+      messages: conversation,
+    });
+
+    return response.content.map((block) => block.text || '').join('');
+  } catch (error) {
+    console.error('Anthropic API error:', error);
+    throw new Error('Anthropic service unavailable');
   }
 }
 

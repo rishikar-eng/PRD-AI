@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { API_URL } from '../config';
 import AgentPipelineV2 from './AgentPipelineV2';
 
+const MAX_UPLOAD_BYTES = 1024 * 1024; // 1 MB — beyond this the file won't fit in the model context anyway
+
 export default function ExternalPRDReview({ originalPRD, onComplete, onBack }) {
   const [uploadedPRD, setUploadedPRD] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
@@ -13,6 +15,20 @@ export default function ExternalPRDReview({ originalPRD, onComplete, onBack }) {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    const isTextFile = file.type === 'text/plain' || file.type === 'text/markdown' || file.name.endsWith('.md');
+    if (!isTextFile) {
+      alert('Please upload a .txt or .md file');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      const sizeMb = (file.size / 1024 / 1024).toFixed(2);
+      alert(`File is ${sizeMb} MB. Maximum allowed is 1 MB.`);
+      e.target.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
