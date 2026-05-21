@@ -1,9 +1,12 @@
 services:
-  # Backend API Server
+  # Single-service deployment: backend builds the frontend during npm install,
+  # then serves it as static files. One Render Web Service, no separate
+  # frontend host, no cross-origin CORS. Backend mounts /api/* routes; everything
+  # else falls through to the React SPA's index.html.
   - type: web
-    name: prd-pipeline-api
+    name: prd-ai
     runtime: node
-    buildCommand: cd server && npm install
+    buildCommand: cd client && npm install --include=dev && npm run build && cd ../server && npm install
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
@@ -28,23 +31,6 @@ services:
       - key: TEAMS_WEBHOOK_URL
         sync: false
       - key: CORS_ORIGIN
-        value: https://prd-pipeline.onrender.com
+        value: https://prd-ai.onrender.com
       - key: FRONTEND_URL
-        value: https://prd-pipeline.onrender.com
-
-  # Frontend Static Site
-  - type: web
-    name: prd-pipeline
-    runtime: static
-    buildCommand: cd client && npm install && npm run build
-    staticPublishPath: ./client/dist
-    routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://prd-pipeline-api.onrender.com/api/*
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://prd-pipeline-api.onrender.com
+        value: https://prd-ai.onrender.com

@@ -3,8 +3,13 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { attachSession } from './middleware/auth.js';
 import { getSessionMiddleware } from './services/sessionStore.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -49,6 +54,19 @@ app.use('/api/share', shareRoutes);
 app.use('/api/handoff', handoffRoutes);
 app.use('/api/input-requests', inputRequestsRoutes);
 app.use('/api/team', teamRoutes);
+
+// In production, serve the built frontend from the same Render service
+// (single-service deployment — backend hosts the static SPA so we don't need
+// a separate frontend service or CORS workarounds).
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  // SPA fallback: any non-API GET serves the React app
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 // Error handling
 app.use((err, req, res, next) => {

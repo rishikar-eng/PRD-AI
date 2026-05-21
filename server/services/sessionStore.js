@@ -61,7 +61,10 @@ export function getSessionMiddleware() {
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      // 'lax' works for same-origin (Render single-service deployment) and
+      // for local dev via Vite's proxy. 'none' was only needed when the
+      // frontend and backend were on different origins.
+      sameSite: 'lax',
       maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   };
